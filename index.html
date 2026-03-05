@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portal do Investidor | SunnyHUB</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient-bg" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <img src="./LOGOTIPO%20LARANJA.png" alt="SunnyHUB" />
+        <div>
+          <p class="eyebrow">Portal do Investidor</p>
+          <h1>SunnyHUB Rendimentos</h1>
+        </div>
+      </div>
+      <button id="logoutBtn" class="btn ghost hidden">Sair</button>
+    </header>
+
+    <main class="container">
+      <section class="panel login" id="loginPanel">
+        <h2>Acesso do investidor</h2>
+        <p>Digite o e-mail cadastrado para visualizar seu investimento.</p>
+        <form id="loginForm">
+          <input
+            id="emailInput"
+            type="email"
+            placeholder="investidor@exemplo.com"
+            required
+            autocomplete="email"
+          />
+          <button type="submit" class="btn primary">Entrar</button>
+        </form>
+      </section>
+
+      <section class="panel dashboard hidden" id="dashboardPanel">
+        <div class="dashboard-header">
+          <div>
+            <p class="eyebrow" id="investorEmail">-</p>
+            <h2 id="investorName">Investidor</h2>
+            <div class="dashboard-meta">
+              <span class="meta-pill" id="viewerBadge">-</span>
+              <span class="meta-pill" id="investorPeriod">Período: -</span>
+            </div>
+            <div class="account-switch hidden" id="accountSwitchWrap">
+              <label for="accountSelect">Conta visível</label>
+              <select id="accountSelect" aria-label="Selecionar conta para visualização"></select>
+            </div>
+          </div>
+          <span class="chip" id="investorRule">Regra</span>
+        </div>
+
+        <div class="kpis">
+          <article class="kpi">
+            <p>Total investido</p>
+            <strong id="kpiInvested">R$ 0,00</strong>
+          </article>
+          <article class="kpi">
+            <p>Dividendos acumulados</p>
+            <strong id="kpiDividends">R$ 0,00</strong>
+          </article>
+          <article class="kpi">
+            <p>Total projetado (principal + dividendos)</p>
+            <strong id="kpiProjected">R$ 0,00</strong>
+          </article>
+        </div>
+
+        <div class="content-grid">
+          <article class="subpanel">
+            <h3>Evolução mensal de dividendos</h3>
+            <canvas id="dividendChart" width="900" height="360" aria-label="Gráfico de dividendos"></canvas>
+          </article>
+        </div>
+
+        <article class="subpanel table-wrapper">
+          <h3>Rendimento mês a mês</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>CDI (%)</th>
+                <th>Taxa aplicada (%)</th>
+                <th>Dividendo (R$)</th>
+                <th>Acumulado (R$)</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </article>
+      </section>
+
+      <div id="bootErrors" class="upload-feedback hidden" aria-live="polite"></div>
+      <p id="status" class="status"></p>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

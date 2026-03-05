@@ -1,0 +1,21 @@
+{
+  "name": "portal-investidor-sunnyhub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portal do Investidor SunnyHUB",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "quality": "npm run lint && npm run test && npm run build",
+    "test:coverage": "node --test --experimental-test-coverage"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.3",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.2"
+  }
+}
