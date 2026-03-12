@@ -17,6 +17,13 @@ export function annualSpreadToMonthly(annualPercent) {
   return (Math.pow(1 + annualPercent / 100, 1 / 12) - 1) * 100;
 }
 
+function normalizePaymentFrequencyStrict(value) {
+  const normalized = safeTrim(value).toLowerCase();
+  if (normalized === "mensal") return "mensal";
+  if (normalized === "trimestral") return "trimestral";
+  return "";
+}
+
 function normalizeRuleStrict(rule) {
   const value = safeTrim(rule).toLowerCase();
   if (value.includes("cdi") && value.includes("+3")) return "CDI+3";
@@ -69,6 +76,12 @@ function parseStartDate(input) {
   return null;
 }
 
+function monthDiff(startMonth, currentMonth) {
+  const [startYear, startMonthNumber] = startMonth.split("-").map(Number);
+  const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number);
+  return (currentYear - startYear) * 12 + (currentMonthNumber - startMonthNumber);
+}
+
 function daysInMonthUTC(year, month) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
@@ -110,10 +123,12 @@ export function calculateHistory(investor, cdiSeries) {
   const parsedStart = parseStartDate(investor.startDate || investor.startMonth);
   const startMonth = parsedStart?.monthKey || "";
   const startDay = parsedStart?.day || 1;
+  const paymentFrequency = normalizePaymentFrequencyStrict(investor.paymentFrequency) || "mensal";
   const scopedSeries = startMonth
     ? cdiSeries.filter((row) => row.month >= startMonth)
     : cdiSeries;
   let accumulated = 0;
+  let payableCarry = 0;
 
   return scopedSeries.map((row) => {
     const appliedRate = ruleRate(row.cdi, investor.rule);
@@ -122,13 +137,26 @@ export function calculateHistory(investor, cdiSeries) {
       const activeDays = daysInMonthUTC(parsedStart.year, parsedStart.month) - startDay + 1;
       factor = Math.max(0, Math.min(1, activeDays / daysInMonthUTC(parsedStart.year, parsedStart.month)));
     }
-    const dividend = investor.invested * (appliedRate / 100) * factor;
+    const accruedDividend = investor.invested * (appliedRate / 100) * factor;
+    payableCarry += accruedDividend;
+
+    let dividend = accruedDividend;
+    if (paymentFrequency === "trimestral") {
+      const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : 0;
+      const isQuarterClose = monthsSinceStart >= 0 && (monthsSinceStart + 1) % 3 === 0;
+      dividend = isQuarterClose ? payableCarry : 0;
+      if (isQuarterClose) {
+        payableCarry = 0;
+      }
+    }
+
     accumulated += dividend;
 
     return {
       month: row.month,
       cdi: row.cdi,
       appliedRate,
+      accruedDividend,
       dividend,
       accumulated,
     };
@@ -163,7 +191,14 @@ export function resolveViewerScope(loginEmail, investors) {
 
 export function validateInvestorRows(csvData) {
   const file = "investidores.csv";
-  const required = ["email", "nome", "total_investido", "tipo_rendimento", "inicio_rendimento"];
+  const required = [
+    "email",
+    "nome",
+    "total_investido",
+    "tipo_rendimento",
+    "inicio_rendimento",
+    "periodicidade_pagamento",
+  ];
   const optional = ["usinas", "assessor", "master"];
   const headers = csvData?.headers || [];
   const rows = csvData?.rows || [];
@@ -238,6 +273,20 @@ export function validateInvestorRows(csvData) {
       hasRowError = true;
     }
 
+    const paymentFrequency = normalizePaymentFrequencyStrict(row.periodicidade_pagamento);
+    if (!paymentFrequency) {
+      errors.push(
+        validationError(
+          "INVALID_PAYMENT_FREQUENCY",
+          file,
+          line,
+          "periodicidade_pagamento",
+          "Periodicidade de pagamento deve ser mensal ou trimestral."
+        )
+      );
+      hasRowError = true;
+    }
+
     const startRaw = safeTrim(row.inicio_rendimento);
     const parsedStart = parseStartDate(startRaw);
     if (!parsedStart) {
@@ -272,6 +321,7 @@ export function validateInvestorRows(csvData) {
         name: safeTrim(row.nome) || "Investidor",
         invested,
         rule: normalizedRule,
+        paymentFrequency,
         startMonth: parsedStart.monthKey,
         startDate: startRaw.length === 7 ? `${startRaw}-01` : startRaw,
         advisorEmail,
@@ -328,6 +378,59 @@ export function validateCdiRows(csvData) {
       data.push({
         month,
         cdi,
+      });
+    }
+  });
+
+  data.sort((a, b) => a.month.localeCompare(b.month));
+  return { data, errors };
+}
+
+export function validateIgpmRows(csvData) {
+  const file = "igpm.csv";
+  const required = ["mes", "igpm_percent"];
+  const headers = csvData?.headers || [];
+  const rows = csvData?.rows || [];
+  const errors = validateHeaders(headers, required, file);
+  if (!rows.length) {
+    errors.push(validationError("EMPTY_FILE", file, null, null, "CSV sem linhas de dados."));
+    return { data: [], errors };
+  }
+
+  const seenMonths = new Set();
+  const data = [];
+  rows.forEach((row) => {
+    const line = Number(row.__line) || null;
+    let hasRowError = false;
+    const month = safeTrim(row.mes);
+    if (!isValidMonthFormat(month)) {
+      errors.push(validationError("INVALID_MONTH", file, line, "mes", "Mes fora do formato YYYY-MM."));
+      hasRowError = true;
+    } else if (seenMonths.has(month)) {
+      errors.push(validationError("DUPLICATE_MONTH", file, line, "mes", `Mes duplicado: ${month}.`));
+      hasRowError = true;
+    } else {
+      seenMonths.add(month);
+    }
+
+    const igpm = parseNumeric(row.igpm_percent);
+    if (!Number.isFinite(igpm)) {
+      errors.push(
+        validationError(
+          "INVALID_NUMBER",
+          file,
+          line,
+          "igpm_percent",
+          "Numero invalido em igpm_percent."
+        )
+      );
+      hasRowError = true;
+    }
+
+    if (!hasRowError) {
+      data.push({
+        month,
+        igpm,
       });
     }
   });

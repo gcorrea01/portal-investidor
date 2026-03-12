@@ -25,10 +25,15 @@ Definir contratos fechados para ingestao de dados via CSV no portal.
 | `nome` | string | Obrigatorio, tamanho minimo 2 caracteres apos trim. |
 | `total_investido` | numero | Obrigatorio, decimal em BRL, maior que 0. |
 | `tipo_rendimento` | string | Obrigatorio, apenas: `CDI+3`, `CDI+5`, `1% a.m.` (aceita variacoes e normaliza). |
-| `usinas` | string | Obrigatorio (pode vazio), lista separada por `|` sem itens vazios intermediarios. |
+| `inicio_rendimento` | string | Obrigatorio, formato `YYYY-MM` ou `YYYY-MM-DD`. |
+| `periodicidade_pagamento` | string | Obrigatorio, apenas: `mensal` ou `trimestral`. |
 
 ### Colunas opcionais
-Nenhuma. Colunas extras devem gerar erro de contrato para evitar ambiguidade.
+| Coluna | Tipo | Regra |
+| --- | --- | --- |
+| `usinas` | string | Opcional, lista separada por `|`. |
+| `assessor` | string | Opcional, e-mail valido quando informado. |
+| `master` | string | Opcional, e-mail valido quando informado. |
 
 ### Regras de normalizacao
 - `email`: aplicar `trim` + `lowercase` antes de validar unicidade.
@@ -37,35 +42,42 @@ Nenhuma. Colunas extras devem gerar erro de contrato para evitar ambiguidade.
   - entradas contendo `cdi` e `+3` -> `CDI+3`
   - entradas contendo `cdi` e `+5` -> `CDI+5`
   - entradas contendo `1%`, `1.0`, `1,0` e `a.m` -> `1% a.m.`
-- `usinas`: aplicar `trim`, dividir por `|`, remover espacos laterais por item, remover itens vazios nas pontas. Itens vazios no meio (ex.: `UFV A||UFV B`) devem gerar erro.
+- `inicio_rendimento`: aceitar `YYYY-MM` ou `YYYY-MM-DD`.
+- `periodicidade_pagamento`: aceitar apenas `mensal` e `trimestral`, com normalizacao para lowercase.
 
 ### Exemplo valido
 ```csv
-email,nome,total_investido,tipo_rendimento,usinas
-ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,UFV Sol Nascente I|UFV Horizonte
-bruno@sunnyhub.com,Bruno Siqueira,90000.00,CDI+5,UFV Aurora
-carla@sunnyhub.com,Carla Menezes,65000.00,1% a.m.,UFV Horizonte|UFV Vale Verde
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento,assessor,master
+ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,2025-09-18,mensal,assessor@sunnyhub.com,master@sunnyhub.com
+bruno@sunnyhub.com,Bruno Siqueira,90000.00,CDI+5,2025-10-01,trimestral,assessor@sunnyhub.com,master@sunnyhub.com
+carla@sunnyhub.com,Carla Menezes,65000.00,1% a.m.,2025-06,mensal,,
 ```
 
 ### Exemplos invalidos
 ```csv
-email,nome,total_investido,tipo_rendimento,usinas
-ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,UFV A
-ANA@sunnyhub.com,Ana D.,120000.00,CDI+5,UFV B
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento
+ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,2025-09-18,mensal
+ANA@sunnyhub.com,Ana D.,120000.00,CDI+5,2025-10-01,mensal
 ```
 Erro: email duplicado apos normalizacao (`ana@sunnyhub.com`).
 
 ```csv
-email,nome,total_investido,tipo_rendimento,usinas
-joao@sunnyhub.com,Joao,0,CDI+3,UFV A
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento
+joao@sunnyhub.com,Joao,0,CDI+3,2025-10-01,mensal
 ```
 Erro: `total_investido` deve ser maior que zero.
 
 ```csv
-email,nome,total_investido,tipo_rendimento,usinas
-maria@sunnyhub.com,Maria,100000.00,CDI+7,UFV A
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento
+maria@sunnyhub.com,Maria,100000.00,CDI+7,2025-10-01,mensal
 ```
 Erro: `tipo_rendimento` invalido.
+
+```csv
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento
+marcos@sunnyhub.com,Marcos,100000.00,CDI+5,2025-10-01,semestral
+```
+Erro: `periodicidade_pagamento` invalida.
 
 ## CSV 2: CDI mensal
 
@@ -127,5 +139,6 @@ Erro: mes duplicado.
 | `DUPLICATE_MONTH` | Mes repetido no CSV de CDI. |
 | `INVALID_NUMBER` | Numero invalido em campos numericos. |
 | `INVALID_RULE` | Tipo de rendimento fora das regras aceitas. |
+| `INVALID_PAYMENT_FREQUENCY` | Periodicidade de pagamento fora das regras aceitas. |
 | `INVALID_PLANTS_FIELD` | Campo `usinas` com separacao invalida. |
 | `EMPTY_FILE` | CSV sem linhas de dados. |

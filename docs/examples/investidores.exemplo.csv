@@ -1,4 +1,4 @@
-email,nome,total_investido,tipo_rendimento,inicio_rendimento,assessor,master
-ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,2024-03-12,assessor@sunnyhub.com,master@sunnyhub.com
-bruno@sunnyhub.com,Bruno Siqueira,90000.00,CDI+5,2024-03-01,assessor@sunnyhub.com,master@sunnyhub.com
-carla@sunnyhub.com,Carla Menezes,65000.00,1% a.m.,2024-04-18,assessor2@sunnyhub.com,master@sunnyhub.com
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento,assessor,master
+ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,2024-03-12,mensal,assessor@sunnyhub.com,master@sunnyhub.com
+bruno@sunnyhub.com,Bruno Siqueira,90000.00,CDI+5,2024-03-01,trimestral,assessor@sunnyhub.com,master@sunnyhub.com
+carla@sunnyhub.com,Carla Menezes,65000.00,1% a.m.,2024-04-18,mensal,assessor2@sunnyhub.com,master@sunnyhub.com

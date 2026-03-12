@@ -3,17 +3,20 @@ import {
   resolveViewerScope,
   safeTrim,
   validateCdiRows,
+  validateIgpmRows,
   validateInvestorRows,
 } from "./src/business.mjs";
 
 const DATA_FILES = {
   investors: "./data/investidores.csv",
   cdi: "./data/cdi.csv",
+  igpm: "./data/igpm.csv",
 };
 
 const state = {
   investors: [],
   cdiSeries: [],
+  igpmSeries: [],
   viewerRole: "none",
   accessibleInvestors: [],
   currentInvestor: null,
@@ -350,23 +353,28 @@ async function bootstrapData() {
   try {
     setStatus("", "");
 
-    const [investorResponse, cdiResponse] = await Promise.all([
+    const [investorResponse, cdiResponse, igpmResponse] = await Promise.all([
       fetch(DATA_FILES.investors, { cache: "no-store" }),
       fetch(DATA_FILES.cdi, { cache: "no-store" }),
+      fetch(DATA_FILES.igpm, { cache: "no-store" }),
     ]);
 
-    if (!investorResponse.ok || !cdiResponse.ok) {
-      throw new Error("Nao foi possivel ler os CSVs em data/investidores.csv e data/cdi.csv.");
+    if (!investorResponse.ok || !cdiResponse.ok || !igpmResponse.ok) {
+      throw new Error(
+        "Nao foi possivel ler os CSVs em data/investidores.csv, data/cdi.csv e data/igpm.csv."
+      );
     }
 
-    const [investorText, cdiText] = await Promise.all([
+    const [investorText, cdiText, igpmText] = await Promise.all([
       investorResponse.text(),
       cdiResponse.text(),
+      igpmResponse.text(),
     ]);
 
     const investorValidation = validateInvestorRows(parseCSV(investorText));
     const cdiValidation = validateCdiRows(parseCSV(cdiText));
-    const errors = [...investorValidation.errors, ...cdiValidation.errors];
+    const igpmValidation = validateIgpmRows(parseCSV(igpmText));
+    const errors = [...investorValidation.errors, ...cdiValidation.errors, ...igpmValidation.errors];
 
     if (errors.length) {
       renderBootErrors(errors);
@@ -377,6 +385,7 @@ async function bootstrapData() {
     renderBootErrors([]);
     state.investors = investorValidation.data;
     state.cdiSeries = cdiValidation.data;
+    state.igpmSeries = igpmValidation.data;
     setStatus("", "");
   } catch (error) {
     renderBootErrors([

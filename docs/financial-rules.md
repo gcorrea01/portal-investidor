@@ -6,6 +6,7 @@ Definir regras matematicas unicas para calculo mensal de dividendos.
 ## Entradas por investidor
 - `principal`: valor de `total_investido` (BRL).
 - `tipo_rendimento`: `CDI+3`, `CDI+5` ou `1% a.m.`.
+- `periodicidade_pagamento`: `mensal` ou `trimestral`.
 - Serie mensal de CDI: pares (`mes`, `cdi_percent`).
 
 ## Convencoes
@@ -39,6 +40,13 @@ Para cada mes `m`:
 2. `acumulado_m = soma(dividendo_i) para todo i <= m`
 3. `total_projetado_m = principal + acumulado_m`
 
+## Regra de pagamento
+- `mensal`: o valor calculado no mes e pago no proprio mes.
+- `trimestral`: o valor calculado continua sendo apurado mes a mes, mas o pagamento ocorre apenas a cada 3 meses, contado a partir de `inicio_rendimento`.
+- Em meses nao pagadores do investimento `trimestral`, o valor pago no mes e `0`, mas o valor fica carregado para o fechamento do trimestre.
+- No mes de fechamento trimestral, o pagamento corresponde a soma dos 3 meses apurados desde o ultimo pagamento.
+- Se o primeiro mes for parcial por conta de `inicio_rendimento` em `YYYY-MM-DD`, a proporcionalidade desse primeiro mes entra normalmente no primeiro fechamento trimestral.
+
 ## Convencao de arredondamento
 - Internamente: manter precisao de ponto flutuante durante o calculo do mes.
 - Exibicao e persistencia monetaria: arredondar para 2 casas decimais (centavos, half-up).
@@ -50,6 +58,7 @@ Para cada mes `m`:
 | `mes` | string | `YYYY-MM` |
 | `cdi_percent` | numero | CDI do mes de entrada |
 | `taxa_aplicada_percent` | numero | Taxa efetiva usada no mes |
+| `accrued_dividend_brl` | numero | Rendimento apurado no mes, independentemente da data de pagamento |
 | `dividendo_brl` | numero | Dividendo do mes |
 | `acumulado_brl` | numero | Soma de dividendos ate o mes |
 | `total_projetado_brl` | numero | `principal + acumulado_brl` |

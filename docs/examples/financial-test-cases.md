@@ -79,3 +79,16 @@ Entrada:
 Esperado:
 - taxa_aplicada_percent: `0.046627%`
 - dividendo_brl: `46.63`
+
+## Caso 9 - Pagamento trimestral com fechamento no terceiro mes
+Entrada:
+- tipo: `1% a.m.`
+- periodicidade_pagamento: `trimestral`
+- inicio_rendimento: `2026-01-01`
+- meses: `2026-01`, `2026-02`, `2026-03`
+
+Esperado:
+- mes 1: `accrued_dividend_brl = 1000.00`, `dividendo_brl = 0.00`
+- mes 2: `accrued_dividend_brl = 1000.00`, `dividendo_brl = 0.00`
+- mes 3: `accrued_dividend_brl = 1000.00`, `dividendo_brl = 3000.00`
+- acumulado_brl ao final do mes 3: `3000.00`

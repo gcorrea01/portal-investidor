@@ -8,6 +8,7 @@ import {
   resolveViewerScope,
   ruleRate,
   validateCdiRows,
+  validateIgpmRows,
   validateInvestorRows,
 } from "../src/business.mjs";
 
@@ -123,6 +124,33 @@ test("validateCdiRows rejects invalid month format", () => {
   assert.ok(result.errors.some((error) => error.code === "INVALID_MONTH"));
 });
 
+test("validateIgpmRows accepts valid monthly series", () => {
+  const csvData = {
+    headers: ["mes", "igpm_percent"],
+    rows: [
+      { __line: 2, mes: "2025-12", igpm_percent: "0.94" },
+      { __line: 3, mes: "2026-01", igpm_percent: "0.27" },
+    ],
+  };
+
+  const result = validateIgpmRows(csvData);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data.length, 2);
+});
+
+test("validateIgpmRows rejects duplicate month", () => {
+  const csvData = {
+    headers: ["mes", "igpm_percent"],
+    rows: [
+      { __line: 2, mes: "2026-01", igpm_percent: "0.27" },
+      { __line: 3, mes: "2026-01", igpm_percent: "1.06" },
+    ],
+  };
+
+  const result = validateIgpmRows(csvData);
+  assert.ok(result.errors.some((error) => error.code === "DUPLICATE_MONTH"));
+});
+
 test("validateInvestorRows accepts optional assessor/master and repeated investor email", () => {
   const csvData = {
     headers: [
@@ -131,6 +159,7 @@ test("validateInvestorRows accepts optional assessor/master and repeated investo
       "total_investido",
       "tipo_rendimento",
       "inicio_rendimento",
+      "periodicidade_pagamento",
       "assessor",
       "master",
     ],
@@ -142,6 +171,7 @@ test("validateInvestorRows accepts optional assessor/master and repeated investo
         total_investido: "50000",
         tipo_rendimento: "CDI+5",
         inicio_rendimento: "2025-08",
+        periodicidade_pagamento: "mensal",
         assessor: "assessor@empresa.com",
         master: "master@empresa.com",
       },
@@ -152,6 +182,7 @@ test("validateInvestorRows accepts optional assessor/master and repeated investo
         total_investido: "100000",
         tipo_rendimento: "CDI+5",
         inicio_rendimento: "2026-01",
+        periodicidade_pagamento: "mensal",
         assessor: "assessor@empresa.com",
         master: "master@empresa.com",
       },
@@ -165,7 +196,14 @@ test("validateInvestorRows accepts optional assessor/master and repeated investo
 
 test("validateInvestorRows rejects impossible start date", () => {
   const csvData = {
-    headers: ["email", "nome", "total_investido", "tipo_rendimento", "inicio_rendimento"],
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "periodicidade_pagamento",
+    ],
     rows: [
       {
         __line: 2,
@@ -174,6 +212,7 @@ test("validateInvestorRows rejects impossible start date", () => {
         total_investido: "1000",
         tipo_rendimento: "CDI+3",
         inicio_rendimento: "2026-02-31",
+        periodicidade_pagamento: "mensal",
       },
     ],
   };

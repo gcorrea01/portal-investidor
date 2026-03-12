@@ -35,6 +35,11 @@ Observacao: abrir `index.html` direto em `file://` pode bloquear leitura dos CSV
 ## Dados usados em runtime
 - `data/investidores.csv`
 - `data/cdi.csv`
+- `data/igpm.csv`
+
+Fonte recomendada das series mensais:
+- CDI: Banco Central / SGS
+- IGP-M: FGV IBRE (fonte primária) e Banco Central / SGS serie 189 para distribuicao estruturada
 
 ## Build de producao
 ```bash

@@ -18,6 +18,7 @@ Estrutura minima esperada:
 - `dist/app.js`
 - `dist/data/investidores.csv`
 - `dist/data/cdi.csv`
+- `dist/data/igpm.csv`
 - `dist/src/business.mjs`
 
 ## Publicacao
@@ -29,6 +30,7 @@ Estrutura minima esperada:
    - `https://investidor.sunnyhub.com.br/`
    - `https://investidor.sunnyhub.com.br/data/investidores.csv`
    - `https://investidor.sunnyhub.com.br/data/cdi.csv`
+   - `https://investidor.sunnyhub.com.br/data/igpm.csv`
 
 ## Exemplo Nginx (subdominio)
 ```nginx
@@ -76,7 +78,7 @@ location = /investidor/ {
 5. Testar em desktop e mobile.
 
 ## Processo de atualizacao de dados
-1. Atualizar `data/investidores.csv` e/ou `data/cdi.csv`.
+1. Atualizar `data/investidores.csv`, `data/cdi.csv` e/ou `data/igpm.csv`.
 2. Rodar `npm run test`.
 3. Rodar `npm run build`.
 4. Publicar novamente o conteudo de `dist/`.
