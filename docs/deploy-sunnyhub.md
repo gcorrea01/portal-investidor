@@ -1,7 +1,7 @@
-# Deploy - Portal do Investidor em sunnyhub.com.br
+# Deploy - Portal do Investidor em Subdominio
 
 ## Objetivo
-Publicar o portal em `https://sunnyhub.com.br/investidor/` usando hosting estatico.
+Publicar o portal em `https://investidor.sunnyhub.com.br/` usando hosting estatico.
 
 ## Artefato de deploy
 Gerar build local:
@@ -21,30 +21,51 @@ Estrutura minima esperada:
 - `dist/src/business.mjs`
 
 ## Publicacao
-1. Copiar o conteudo de `dist/` para o diretorio servido em `/investidor/`.
-2. Garantir que os arquivos CSV estejam publicos dentro de `/investidor/data/`.
-3. Validar acesso HTTPS:
-   - `https://sunnyhub.com.br/investidor/`
-   - `https://sunnyhub.com.br/investidor/data/investidores.csv`
-   - `https://sunnyhub.com.br/investidor/data/cdi.csv`
+1. Criar/apontar DNS do subdominio `investidor.sunnyhub.com.br` para o servidor (A/AAAA ou CNAME).
+2. Copiar o conteudo de `dist/` para o diretorio servido na raiz do subdominio.
+3. Garantir que os arquivos CSV estejam publicos dentro de `/data/`.
+4. Configurar certificado TLS para `investidor.sunnyhub.com.br`.
+5. Validar acesso HTTPS:
+   - `https://investidor.sunnyhub.com.br/`
+   - `https://investidor.sunnyhub.com.br/data/investidores.csv`
+   - `https://investidor.sunnyhub.com.br/data/cdi.csv`
 
-## Exemplo Nginx
+## Exemplo Nginx (subdominio)
 ```nginx
-location /investidor/ {
-    alias /var/www/sunnyhub/investidor/;
+server {
+    listen 443 ssl;
+    server_name investidor.sunnyhub.com.br;
+
+    root /var/www/sunnyhub/investidor;
     index index.html;
     try_files $uri $uri/ =404;
 }
 ```
 
-## Exemplo Apache
+## Exemplo Apache (subdominio)
 ```apache
-Alias /investidor/ "/var/www/sunnyhub/investidor/"
-<Directory "/var/www/sunnyhub/investidor/">
-    Options Indexes FollowSymLinks
-    AllowOverride None
-    Require all granted
-</Directory>
+<VirtualHost *:443>
+    ServerName investidor.sunnyhub.com.br
+    DocumentRoot "/var/www/sunnyhub/investidor"
+
+    <Directory "/var/www/sunnyhub/investidor">
+        Options Indexes FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+</VirtualHost>
+```
+
+## Redirect opcional do site principal
+Se quiser manter a URL antiga como atalho:
+
+- `https://sunnyhub.com.br/investidor/` -> `https://investidor.sunnyhub.com.br/`
+
+Exemplo Nginx:
+```nginx
+location = /investidor/ {
+    return 301 https://investidor.sunnyhub.com.br/;
+}
 ```
 
 ## Checklist de validacao pos-deploy
@@ -64,8 +85,8 @@ Alias /investidor/ "/var/www/sunnyhub/investidor/"
 Manter a versao anterior de `dist/` no servidor. Em caso de incidente:
 1. Restaurar pasta anterior.
 2. Limpar cache de CDN/proxy (se houver).
-3. Revalidar URL `/investidor/`.
+3. Revalidar URL `https://investidor.sunnyhub.com.br/`.
 
 ## Seguranca
-Atualmente os CSVs ficam acessiveis para qualquer usuario que tenha acesso ao endpoint `/investidor/`.
+Atualmente os CSVs ficam acessiveis para qualquer usuario que tenha acesso ao endpoint do subdominio.
 Se os dados forem sensiveis, proteger a rota em camada de servidor (SSO, auth corporativa, VPN ou restricao IP).

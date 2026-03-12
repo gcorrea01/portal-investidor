@@ -43,9 +43,11 @@ const els = {
 };
 
 function setStatus(message, kind = "") {
-  els.status.textContent = message;
+  const text = safeTrim(message);
+  els.status.textContent = text;
   els.status.classList.remove("ok", "error");
-  if (kind) {
+  els.status.classList.toggle("hidden", !text);
+  if (text && kind) {
     els.status.classList.add(kind);
   }
 }
@@ -346,7 +348,7 @@ function handleLogin(event) {
 
 async function bootstrapData() {
   try {
-    setStatus("Carregando base de investidores...", "");
+    setStatus("", "");
 
     const [investorResponse, cdiResponse] = await Promise.all([
       fetch(DATA_FILES.investors, { cache: "no-store" }),
@@ -375,11 +377,7 @@ async function bootstrapData() {
     renderBootErrors([]);
     state.investors = investorValidation.data;
     state.cdiSeries = cdiValidation.data;
-
-    setStatus(
-      `Base pronta: ${state.investors.length} investidor(es) e ${state.cdiSeries.length} mes(es) de CDI.`,
-      "ok"
-    );
+    setStatus("", "");
   } catch (error) {
     renderBootErrors([
       {

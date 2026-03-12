@@ -44,6 +44,7 @@ Artefato final: pasta `dist/`.
 
 ## Deploy no site institucional
 Guia completo em [docs/deploy-sunnyhub.md](docs/deploy-sunnyhub.md).
+Destino recomendado: `https://investidor.sunnyhub.com.br/`.
 
 ## Documentacao complementar
 - `docs/data-contracts.md`
