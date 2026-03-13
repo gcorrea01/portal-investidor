@@ -5,7 +5,7 @@ Definir regras matematicas unicas para calculo mensal de dividendos.
 
 ## Entradas por investidor
 - `principal`: valor de `total_investido` (BRL).
-- `tipo_rendimento`: `CDI+3`, `CDI+5` ou `1% a.m.`.
+- `tipo_rendimento`: `CDI+N` ou `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`.
 - `periodicidade_pagamento`: `mensal` ou `trimestral`.
 - Serie mensal de CDI: pares (`mes`, `cdi_percent`).
 
@@ -16,21 +16,22 @@ Definir regras matematicas unicas para calculo mensal de dividendos.
 - Dividendo mensal nao capitaliza o principal (juros simples sobre principal fixo).
 
 ## Conversao de spread anual para taxa mensal
-Para regras `CDI+3` e `CDI+5`, converter spread anual para mensal por equivalencia composta:
+Para regras `CDI+N`, converter o spread anual para a periodicidade aplicavel por equivalencia composta:
 
 `spread_mensal_percent = ((1 + spread_anual/100)^(1/12) - 1) * 100`
 
 Onde:
-- para `CDI+3`: `spread_anual = 3`
-- para `CDI+5`: `spread_anual = 5`
+- em `CDI+3`, `spread_anual = 3`
+- em `CDI+5`, `spread_anual = 5`
+- em `CDI+7`, `spread_anual = 7`
+- em qualquer `CDI+N`, `spread_anual = N`
 
 Valores de referencia aproximados:
 - `spread_mensal_3 ~= 0.246627%`
 - `spread_mensal_5 ~= 0.407412%`
 
 ## Taxa aplicada por tipo
-- `CDI+3`: `taxa_aplicada_percent = cdi_percent + spread_mensal_3`
-- `CDI+5`: `taxa_aplicada_percent = cdi_percent + spread_mensal_5`
+- `CDI+N` com pagamento `mensal`: `taxa_aplicada_percent = cdi_percent + spread_mensal_N`
 - `1% a.m.`: `taxa_aplicada_percent = 1.00`
 
 ## Calculo mensal
@@ -42,10 +43,15 @@ Para cada mes `m`:
 
 ## Regra de pagamento
 - `mensal`: o valor calculado no mes e pago no proprio mes.
-- `trimestral`: o valor calculado continua sendo apurado mes a mes, mas o pagamento ocorre apenas a cada 3 meses, contado a partir de `inicio_rendimento`.
-- Em meses nao pagadores do investimento `trimestral`, o valor pago no mes e `0`, mas o valor fica carregado para o fechamento do trimestre.
-- No mes de fechamento trimestral, o pagamento corresponde a soma dos 3 meses apurados desde o ultimo pagamento.
+- `trimestral`: o valor continua sendo apurado por janelas de 3 meses, contadas a partir de `inicio_rendimento`, mas o pagamento ocorre no mes seguinte ao fechamento dessa janela.
+- Exemplo: competencia `jul/ago/set` paga em `out`; `out/nov/dez` paga em `jan`.
+- Para `CDI+N` com `trimestral`, a taxa do trimestre e calculada como:
+  - CDI trimestral efetivo da janela de 3 meses
+  - mais o spread efetivo de `N% a.a.` convertido para o trimestre
+- No mes de pagamento trimestral, o valor pago corresponde ao trimestre imediatamente anterior.
 - Se o primeiro mes for parcial por conta de `inicio_rendimento` em `YYYY-MM-DD`, a proporcionalidade desse primeiro mes entra normalmente no primeiro fechamento trimestral.
+- Para `1% a.m.` com `trimestral`, o sistema continua acumulando os 3 meses e pagando no mes seguinte ao fechamento do trimestre.
+- No frontend, investimentos trimestrais devem exibir apenas os meses em que ha pagamento efetivo.
 
 ## Convencao de arredondamento
 - Internamente: manter precisao de ponto flutuante durante o calculo do mes.

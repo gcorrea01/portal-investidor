@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS investors (
   email TEXT NOT NULL,
   nome TEXT NOT NULL,
   total_investido REAL NOT NULL CHECK (total_investido > 0),
-  tipo_rendimento TEXT NOT NULL CHECK (tipo_rendimento IN ('CDI+3', 'CDI+5', '1% a.m.')),
+  tipo_rendimento TEXT NOT NULL CHECK (tipo_rendimento = '1% a.m.' OR tipo_rendimento LIKE 'CDI+%'),
   inicio_rendimento TEXT NOT NULL,
   periodicidade_pagamento TEXT NOT NULL CHECK (periodicidade_pagamento IN ('mensal', 'trimestral')),
   assessor TEXT,

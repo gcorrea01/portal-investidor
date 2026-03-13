@@ -17,6 +17,14 @@ export function annualSpreadToMonthly(annualPercent) {
   return (Math.pow(1 + annualPercent / 100, 1 / 12) - 1) * 100;
 }
 
+export function annualSpreadToPeriod(annualPercent, periodsPerYear) {
+  return (Math.pow(1 + annualPercent / 100, 1 / periodsPerYear) - 1) * 100;
+}
+
+function annualSpreadForEffectiveMonths(annualPercent, effectiveMonths) {
+  return (Math.pow(1 + annualPercent / 100, effectiveMonths / 12) - 1) * 100;
+}
+
 function normalizePaymentFrequencyStrict(value) {
   const normalized = safeTrim(value).toLowerCase();
   if (normalized === "mensal") return "mensal";
@@ -24,10 +32,19 @@ function normalizePaymentFrequencyStrict(value) {
   return "";
 }
 
+function extractCdiSpread(rule) {
+  const value = safeTrim(rule).toLowerCase();
+  const match = value.match(/cdi\s*\+\s*(\d+(?:[.,]\d+)?)/);
+  if (!match) return Number.NaN;
+
+  const spread = Number(match[1].replace(",", "."));
+  return Number.isFinite(spread) ? spread : Number.NaN;
+}
+
 function normalizeRuleStrict(rule) {
   const value = safeTrim(rule).toLowerCase();
-  if (value.includes("cdi") && value.includes("+3")) return "CDI+3";
-  if (value.includes("cdi") && value.includes("+5")) return "CDI+5";
+  const spread = extractCdiSpread(rule);
+  if (Number.isFinite(spread)) return `CDI+${spread}`;
   if (value.includes("1%") || value.includes("1.0") || value.includes("1,0")) return "1% a.m.";
   return "";
 }
@@ -37,8 +54,8 @@ export function normalizeRule(rule) {
 }
 
 export function ruleRate(cdiPercent, rule) {
-  if (rule === "CDI+3") return cdiPercent + annualSpreadToMonthly(3);
-  if (rule === "CDI+5") return cdiPercent + annualSpreadToMonthly(5);
+  const cdiSpread = extractCdiSpread(rule);
+  if (Number.isFinite(cdiSpread)) return cdiPercent + annualSpreadToMonthly(cdiSpread);
   if (rule === "1% a.m.") return 1;
   return cdiPercent;
 }
@@ -82,8 +99,30 @@ function monthDiff(startMonth, currentMonth) {
   return (currentYear - startYear) * 12 + (currentMonthNumber - startMonthNumber);
 }
 
+function addMonths(month, offset) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const baseIndex = year * 12 + (monthNumber - 1) + offset;
+  const nextYear = Math.floor(baseIndex / 12);
+  const nextMonth = (baseIndex % 12) + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
+}
+
 function daysInMonthUTC(year, month) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function isQuarterClose(monthsSinceStart) {
+  return monthsSinceStart >= 0 && (monthsSinceStart + 1) % 3 === 0;
+}
+
+function isQuarterlyCdiRule(rule, paymentFrequency) {
+  return paymentFrequency === "trimestral" && Number.isFinite(extractCdiSpread(rule));
+}
+
+function compoundedPercent(values) {
+  return (
+    values.reduce((accumulator, value) => accumulator * (1 + value / 100), 1) - 1
+  ) * 100;
 }
 
 function isValidEmail(email) {
@@ -270,38 +309,85 @@ export function calculateHistory(investor, cdiSeries) {
     : cdiSeries;
   let accumulated = 0;
   let payableCarry = 0;
+  let quarterWindow = [];
+  const history = [];
 
-  return scopedSeries.map((row) => {
-    const appliedRate = ruleRate(row.cdi, investor.rule);
+  scopedSeries.forEach((row) => {
     let factor = 1;
     if (parsedStart && row.month === startMonth && startDay > 1) {
       const activeDays = daysInMonthUTC(parsedStart.year, parsedStart.month) - startDay + 1;
-      factor = Math.max(0, Math.min(1, activeDays / daysInMonthUTC(parsedStart.year, parsedStart.month)));
+      factor = Math.max(
+        0,
+        Math.min(1, activeDays / daysInMonthUTC(parsedStart.year, parsedStart.month))
+      );
     }
+
+    if (isQuarterlyCdiRule(investor.rule, paymentFrequency)) {
+      const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : quarterWindow.length;
+      quarterWindow.push({ cdi: row.cdi, factor });
+
+      if (isQuarterClose(monthsSinceStart)) {
+        const cdiRate = compoundedPercent(quarterWindow.map((item) => item.cdi * item.factor));
+        const spread = extractCdiSpread(investor.rule);
+        const effectiveMonths = quarterWindow.reduce((total, item) => total + item.factor, 0);
+        const spreadRate = annualSpreadForEffectiveMonths(spread, effectiveMonths);
+        const appliedRate = cdiRate + spreadRate;
+        const accruedDividend = investor.invested * (appliedRate / 100);
+        const dividend = accruedDividend;
+        accumulated += dividend;
+        history.push({
+          month: addMonths(row.month, 1),
+          cdi: cdiRate,
+          appliedRate,
+          accruedDividend,
+          dividend,
+          accumulated,
+        });
+        quarterWindow = [];
+      }
+      return;
+    }
+
+    const appliedRate = ruleRate(row.cdi, investor.rule);
     const accruedDividend = investor.invested * (appliedRate / 100) * factor;
     payableCarry += accruedDividend;
 
     let dividend = accruedDividend;
     if (paymentFrequency === "trimestral") {
       const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : 0;
-      const isQuarterClose = monthsSinceStart >= 0 && (monthsSinceStart + 1) % 3 === 0;
-      dividend = isQuarterClose ? payableCarry : 0;
-      if (isQuarterClose) {
+      if (isQuarterClose(monthsSinceStart)) {
+        dividend = payableCarry;
         payableCarry = 0;
+        accumulated += dividend;
+        history.push({
+          month: addMonths(row.month, 1),
+          cdi: compoundedPercent(
+            quarterWindow.concat({ cdi: row.cdi, factor }).map((item) => item.cdi * item.factor)
+          ),
+          appliedRate,
+          accruedDividend: dividend,
+          dividend,
+          accumulated,
+        });
+        quarterWindow = [];
+      } else {
+        quarterWindow.push({ cdi: row.cdi, factor });
       }
+      return;
     }
 
     accumulated += dividend;
-
-    return {
+    history.push({
       month: row.month,
       cdi: row.cdi,
       appliedRate,
       accruedDividend,
       dividend,
       accumulated,
-    };
+    });
   });
+
+  return history;
 }
 
 export function resolveViewerScope(loginEmail, investors) {

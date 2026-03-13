@@ -264,6 +264,11 @@ function roleLabel(role) {
   return "-";
 }
 
+function investorAccountLabel(investor, index) {
+  const sequence = String(index + 1).padStart(3, "0");
+  return `Aporte ${sequence} - ${investor.name}`;
+}
+
 function renderAccountSwitcher(activeId) {
   if (!els.accountSelect || !els.accountSwitchWrap) return;
 
@@ -277,9 +282,9 @@ function renderAccountSwitcher(activeId) {
   els.accountSwitchWrap.classList.remove("hidden");
   els.accountSelect.innerHTML = state.accessibleInvestors
     .map(
-      (investor) =>
+      (investor, index) =>
         `<option value="${investor.id}" ${investor.id === activeId ? "selected" : ""}>
-          ${investor.name} (${investor.email})
+          ${investorAccountLabel(investor, index)}
         </option>`
     )
     .join("");

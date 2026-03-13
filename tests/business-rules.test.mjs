@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   annualSpreadToMonthly,
+  annualSpreadToPeriod,
   calculateHistory,
   parseNumeric,
   resolveViewerScope,
@@ -33,6 +34,14 @@ test("CDI+5 rate matches CDI plus monthly equivalent spread", () => {
   const cdi = 0.84;
   const expectedSpread = annualSpreadToMonthly(5);
   const appliedRate = ruleRate(cdi, "CDI+5");
+
+  assert.ok(Math.abs(appliedRate - (cdi + expectedSpread)) < 1e-12);
+});
+
+test("CDI+7 rate matches CDI plus monthly equivalent spread", () => {
+  const cdi = 0.91;
+  const expectedSpread = annualSpreadToMonthly(7);
+  const appliedRate = ruleRate(cdi, "CDI+7");
 
   assert.ok(Math.abs(appliedRate - (cdi + expectedSpread)) < 1e-12);
 });
@@ -100,6 +109,82 @@ test("calculateHistory applies pro rata on first month when start is mid-month",
   assert.equal(history.length, 2);
   assert.ok(Math.abs(history[0].dividend - 5) < 1e-9);
   assert.ok(Math.abs(history[1].dividend - 10) < 1e-9);
+});
+
+test("calculateHistory pays CDI+7 trimestral with quarter rate on quarter close", () => {
+  const investor = {
+    invested: 1000,
+    rule: "CDI+7",
+    paymentFrequency: "trimestral",
+    startDate: "2026-01-01",
+  };
+
+  const cdiSeries = [
+    { month: "2026-01", cdi: 1 },
+    { month: "2026-02", cdi: 1 },
+    { month: "2026-03", cdi: 1 },
+  ];
+
+  const history = calculateHistory(investor, cdiSeries);
+  const expectedQuarterCdiRate = ((1 + 0.01) ** 3 - 1) * 100;
+  const expectedQuarterSpread = annualSpreadToPeriod(7, 4);
+  const expectedAppliedRate = expectedQuarterCdiRate + expectedQuarterSpread;
+
+  assert.equal(history.length, 1);
+  assert.equal(history[0].month, "2026-04");
+  assert.ok(Math.abs(history[0].appliedRate - expectedAppliedRate) < 1e-9);
+  assert.ok(Math.abs(history[0].dividend - 1000 * (expectedAppliedRate / 100)) < 1e-9);
+  assert.ok(Math.abs(history[0].accumulated - history[0].dividend) < 1e-9);
+});
+
+test("calculateHistory pays CDI+3 trimestral with quarter rate on quarter close", () => {
+  const investor = {
+    invested: 1000,
+    rule: "CDI+3",
+    paymentFrequency: "trimestral",
+    startDate: "2026-01-01",
+  };
+
+  const cdiSeries = [
+    { month: "2026-01", cdi: 0.8 },
+    { month: "2026-02", cdi: 0.9 },
+    { month: "2026-03", cdi: 1.0 },
+  ];
+
+  const history = calculateHistory(investor, cdiSeries);
+  const expectedQuarterCdiRate = ((1 + 0.008) * (1 + 0.009) * (1 + 0.01) - 1) * 100;
+  const expectedQuarterSpread = annualSpreadToPeriod(3, 4);
+  const expectedAppliedRate = expectedQuarterCdiRate + expectedQuarterSpread;
+
+  assert.equal(history.length, 1);
+  assert.equal(history[0].month, "2026-04");
+  assert.ok(Math.abs(history[0].appliedRate - expectedAppliedRate) < 1e-9);
+  assert.ok(Math.abs(history[0].dividend - 1000 * (expectedAppliedRate / 100)) < 1e-9);
+});
+
+test("calculateHistory pays CDI+5 trimestral with quarter rate on quarter close", () => {
+  const investor = {
+    invested: 1000,
+    rule: "CDI+5",
+    paymentFrequency: "trimestral",
+    startDate: "2026-01-01",
+  };
+
+  const cdiSeries = [
+    { month: "2026-01", cdi: 0.8 },
+    { month: "2026-02", cdi: 0.9 },
+    { month: "2026-03", cdi: 1.0 },
+  ];
+
+  const history = calculateHistory(investor, cdiSeries);
+  const expectedQuarterCdiRate = ((1 + 0.008) * (1 + 0.009) * (1 + 0.01) - 1) * 100;
+  const expectedQuarterSpread = annualSpreadToPeriod(5, 4);
+  const expectedAppliedRate = expectedQuarterCdiRate + expectedQuarterSpread;
+
+  assert.equal(history.length, 1);
+  assert.equal(history[0].month, "2026-04");
+  assert.ok(Math.abs(history[0].appliedRate - expectedAppliedRate) < 1e-9);
+  assert.ok(Math.abs(history[0].dividend - 1000 * (expectedAppliedRate / 100)) < 1e-9);
 });
 
 test("validateCdiRows rejects duplicate month", () => {
@@ -193,6 +278,34 @@ test("validateInvestorRows accepts optional assessor/master and repeated investo
   const result = validateInvestorRows(csvData);
   assert.equal(result.errors.length, 0);
   assert.equal(result.data.length, 2);
+});
+
+test("validateInvestorRows accepts CDI+7 trimestral", () => {
+  const csvData = {
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "periodicidade_pagamento",
+    ],
+    rows: [
+      {
+        __line: 2,
+        email: "cliente@x.com",
+        nome: "Cliente",
+        total_investido: "1000",
+        tipo_rendimento: "CDI+7",
+        inicio_rendimento: "2026-01-01",
+        periodicidade_pagamento: "trimestral",
+      },
+    ],
+  };
+
+  const result = validateInvestorRows(csvData);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data[0].rule, "CDI+7");
 });
 
 test("validateInvestorRows rejects impossible start date", () => {
