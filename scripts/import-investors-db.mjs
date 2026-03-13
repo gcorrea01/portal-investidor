@@ -107,6 +107,7 @@ function toDbInvestor(row) {
     total_investido: row.invested,
     tipo_rendimento: row.rule,
     inicio_rendimento: row.startDate,
+    fim_rendimento: row.endDate || null,
     periodicidade_pagamento: row.paymentFrequency,
     assessor: row.advisorEmail || null,
     master: row.masterEmail || null,
@@ -157,10 +158,11 @@ export async function importInvestorsDatabase(options = {}) {
         total_investido,
         tipo_rendimento,
         inicio_rendimento,
+        fim_rendimento,
         periodicidade_pagamento,
         assessor,
         master
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of validation.data) {
@@ -171,6 +173,7 @@ export async function importInvestorsDatabase(options = {}) {
         investor.total_investido,
         investor.tipo_rendimento,
         investor.inicio_rendimento,
+        investor.fim_rendimento,
         investor.periodicidade_pagamento,
         investor.assessor,
         investor.master

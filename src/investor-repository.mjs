@@ -11,6 +11,7 @@ function normalizeEmail(email) {
 function mapInvestorRow(row) {
   const email = normalizeEmail(row.email);
   const startRaw = safeTrim(row.inicio_rendimento);
+  const endRaw = safeTrim(row.fim_rendimento);
   return {
     id: `inv-${row.row_id}`,
     email,
@@ -19,6 +20,8 @@ function mapInvestorRow(row) {
     rule: safeTrim(row.tipo_rendimento),
     startMonth: startRaw.length >= 7 ? startRaw.slice(0, 7) : "",
     startDate: startRaw,
+    endMonth: endRaw.length >= 7 ? endRaw.slice(0, 7) : "",
+    endDate: endRaw,
     paymentFrequency: safeTrim(row.periodicidade_pagamento),
     advisorEmail: normalizeEmail(row.assessor),
     masterEmail: normalizeEmail(row.master),
@@ -38,6 +41,7 @@ export function createInvestorRepository({
     total_investido,
     tipo_rendimento,
     inicio_rendimento,
+    fim_rendimento,
     periodicidade_pagamento,
     assessor,
     master

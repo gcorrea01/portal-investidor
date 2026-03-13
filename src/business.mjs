@@ -41,10 +41,21 @@ function extractCdiSpread(rule) {
   return Number.isFinite(spread) ? spread : Number.NaN;
 }
 
+function extractIpcaSpread(rule) {
+  const value = safeTrim(rule).toLowerCase();
+  const match = value.match(/ipca\s*\+\s*(\d+(?:[.,]\d+)?)/);
+  if (!match) return Number.NaN;
+
+  const spread = Number(match[1].replace(",", "."));
+  return Number.isFinite(spread) ? spread : Number.NaN;
+}
+
 function normalizeRuleStrict(rule) {
   const value = safeTrim(rule).toLowerCase();
   const spread = extractCdiSpread(rule);
   if (Number.isFinite(spread)) return `CDI+${spread}`;
+  const ipcaSpread = extractIpcaSpread(rule);
+  if (Number.isFinite(ipcaSpread)) return `IPCA+${ipcaSpread}`;
   if (value.includes("1%") || value.includes("1.0") || value.includes("1,0")) return "1% a.m.";
   return "";
 }
@@ -56,6 +67,8 @@ export function normalizeRule(rule) {
 export function ruleRate(cdiPercent, rule) {
   const cdiSpread = extractCdiSpread(rule);
   if (Number.isFinite(cdiSpread)) return cdiPercent + annualSpreadToMonthly(cdiSpread);
+  const ipcaSpread = extractIpcaSpread(rule);
+  if (Number.isFinite(ipcaSpread)) return cdiPercent + annualSpreadToMonthly(ipcaSpread);
   if (rule === "1% a.m.") return 1;
   return cdiPercent;
 }
@@ -93,6 +106,12 @@ function parseStartDate(input) {
   return null;
 }
 
+function parseOptionalDate(input) {
+  const raw = safeTrim(input);
+  if (!raw) return null;
+  return parseStartDate(raw);
+}
+
 function monthDiff(startMonth, currentMonth) {
   const [startYear, startMonthNumber] = startMonth.split("-").map(Number);
   const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number);
@@ -123,6 +142,39 @@ function compoundedPercent(values) {
   return (
     values.reduce((accumulator, value) => accumulator * (1 + value / 100), 1) - 1
   ) * 100;
+}
+
+function buildAccrualSeries(cdiSeries, parsedStart, parsedEnd) {
+  const startMonth = parsedStart?.monthKey || "";
+  const endMonth = parsedEnd?.monthKey || "";
+
+  return cdiSeries
+    .filter((row) => {
+      if (startMonth && row.month < startMonth) return false;
+      if (endMonth && row.month > endMonth) return false;
+      return true;
+    })
+    .map((row) => {
+      let factor = 1;
+
+      if (parsedStart && row.month === parsedStart.monthKey && parsedStart.day > 1) {
+        const monthDays = daysInMonthUTC(parsedStart.year, parsedStart.month);
+        const activeDays = monthDays - parsedStart.day + 1;
+        factor *= Math.max(0, Math.min(1, activeDays / monthDays));
+      }
+
+      if (parsedEnd && row.month === parsedEnd.monthKey) {
+        const monthDays = daysInMonthUTC(parsedEnd.year, parsedEnd.month);
+        factor *= Math.max(0, Math.min(1, parsedEnd.day / monthDays));
+      }
+
+      return {
+        month: row.month,
+        cdi: row.cdi,
+        factor,
+      };
+    })
+    .filter((row) => row.factor > 0);
 }
 
 function isValidEmail(email) {
@@ -167,7 +219,7 @@ function validateInvestorDataset(file, headers, rows) {
     "inicio_rendimento",
     "periodicidade_pagamento",
   ];
-  const optional = ["usinas", "assessor", "master"];
+  const optional = ["fim_rendimento", "usinas", "assessor", "master"];
   const errors = [];
   required.forEach((col) => {
     if (!headers.includes(col)) {
@@ -268,6 +320,38 @@ function validateInvestorDataset(file, headers, rows) {
       hasRowError = true;
     }
 
+    const endRaw = safeTrim(row.fim_rendimento);
+    const parsedEnd = parseOptionalDate(endRaw);
+    if (endRaw && !parsedEnd) {
+      errors.push(
+        validationError(
+          "INVALID_DATE",
+          file,
+          line,
+          "fim_rendimento",
+          "Data fora do formato YYYY-MM ou YYYY-MM-DD."
+        )
+      );
+      hasRowError = true;
+    }
+
+    const parsedStartUtc = parsedStart
+      ? Date.UTC(parsedStart.year, parsedStart.month - 1, parsedStart.day)
+      : null;
+    const parsedEndUtc = parsedEnd ? Date.UTC(parsedEnd.year, parsedEnd.month - 1, parsedEnd.day) : null;
+    if (parsedStartUtc !== null && parsedEndUtc !== null && parsedEndUtc < parsedStartUtc) {
+      errors.push(
+        validationError(
+          "INVALID_DATE_RANGE",
+          file,
+          line,
+          "fim_rendimento",
+          "fim_rendimento nao pode ser anterior a inicio_rendimento."
+        )
+      );
+      hasRowError = true;
+    }
+
     const advisorEmail = safeTrim(row.assessor).toLowerCase();
     if (!isValidOptionalEmail(advisorEmail)) {
       errors.push(validationError("INVALID_EMAIL", file, line, "assessor", "E-mail invalido."));
@@ -290,6 +374,8 @@ function validateInvestorDataset(file, headers, rows) {
         paymentFrequency,
         startMonth: parsedStart.monthKey,
         startDate: startRaw.length === 7 ? `${startRaw}-01` : startRaw,
+        endMonth: parsedEnd?.monthKey || "",
+        endDate: endRaw ? (endRaw.length === 7 ? `${endRaw}-01` : endRaw) : "",
         advisorEmail,
         masterEmail,
       });
@@ -299,93 +385,77 @@ function validateInvestorDataset(file, headers, rows) {
   return { data, errors };
 }
 
-export function calculateHistory(investor, cdiSeries) {
+export function calculateHistory(investor, rateSeries) {
   const parsedStart = parseStartDate(investor.startDate || investor.startMonth);
-  const startMonth = parsedStart?.monthKey || "";
-  const startDay = parsedStart?.day || 1;
+  const parsedEnd = parseOptionalDate(investor.endDate || investor.endMonth);
   const paymentFrequency = normalizePaymentFrequencyStrict(investor.paymentFrequency) || "mensal";
-  const scopedSeries = startMonth
-    ? cdiSeries.filter((row) => row.month >= startMonth)
-    : cdiSeries;
+  const accrualSeries = buildAccrualSeries(rateSeries, parsedStart, parsedEnd);
   let accumulated = 0;
-  let payableCarry = 0;
-  let quarterWindow = [];
   const history = [];
 
-  scopedSeries.forEach((row) => {
-    let factor = 1;
-    if (parsedStart && row.month === startMonth && startDay > 1) {
-      const activeDays = daysInMonthUTC(parsedStart.year, parsedStart.month) - startDay + 1;
-      factor = Math.max(
-        0,
-        Math.min(1, activeDays / daysInMonthUTC(parsedStart.year, parsedStart.month))
-      );
+  if (paymentFrequency === "mensal") {
+    accrualSeries.forEach((row) => {
+      const appliedRate = ruleRate(row.cdi, investor.rule);
+      const accruedDividend = investor.invested * (appliedRate / 100) * row.factor;
+      const dividend = accruedDividend;
+      accumulated += dividend;
+      history.push({
+        month: row.month,
+        cdi: row.cdi,
+        appliedRate,
+        accruedDividend,
+        dividend,
+        accumulated,
+      });
+    });
+
+    return history;
+  }
+
+  for (let index = 0; index < accrualSeries.length; index += 3) {
+    const window = accrualSeries.slice(index, index + 3);
+    if (!window.length) continue;
+    const isPartialFinalWindow = window.length < 3;
+    if (isPartialFinalWindow && !parsedEnd) {
+      continue;
     }
+    const paymentMonth = addMonths(window[window.length - 1].month, 1);
 
     if (isQuarterlyCdiRule(investor.rule, paymentFrequency)) {
-      const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : quarterWindow.length;
-      quarterWindow.push({ cdi: row.cdi, factor });
-
-      if (isQuarterClose(monthsSinceStart)) {
-        const cdiRate = compoundedPercent(quarterWindow.map((item) => item.cdi * item.factor));
-        const spread = extractCdiSpread(investor.rule);
-        const effectiveMonths = quarterWindow.reduce((total, item) => total + item.factor, 0);
-        const spreadRate = annualSpreadForEffectiveMonths(spread, effectiveMonths);
-        const appliedRate = cdiRate + spreadRate;
-        const accruedDividend = investor.invested * (appliedRate / 100);
-        const dividend = accruedDividend;
-        accumulated += dividend;
-        history.push({
-          month: addMonths(row.month, 1),
-          cdi: cdiRate,
-          appliedRate,
-          accruedDividend,
-          dividend,
-          accumulated,
-        });
-        quarterWindow = [];
-      }
-      return;
+      const cdiRate = compoundedPercent(window.map((item) => item.cdi * item.factor));
+      const spread = extractCdiSpread(investor.rule);
+      const effectiveMonths = window.reduce((total, item) => total + item.factor, 0);
+      const spreadRate = annualSpreadForEffectiveMonths(spread, effectiveMonths);
+      const appliedRate = cdiRate + spreadRate;
+      const accruedDividend = investor.invested * (appliedRate / 100);
+      const dividend = accruedDividend;
+      accumulated += dividend;
+      history.push({
+        month: paymentMonth,
+        cdi: cdiRate,
+        appliedRate,
+        accruedDividend,
+        dividend,
+        accumulated,
+      });
+      continue;
     }
 
-    const appliedRate = ruleRate(row.cdi, investor.rule);
-    const accruedDividend = investor.invested * (appliedRate / 100) * factor;
-    payableCarry += accruedDividend;
-
-    let dividend = accruedDividend;
-    if (paymentFrequency === "trimestral") {
-      const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : 0;
-      if (isQuarterClose(monthsSinceStart)) {
-        dividend = payableCarry;
-        payableCarry = 0;
-        accumulated += dividend;
-        history.push({
-          month: addMonths(row.month, 1),
-          cdi: compoundedPercent(
-            quarterWindow.concat({ cdi: row.cdi, factor }).map((item) => item.cdi * item.factor)
-          ),
-          appliedRate,
-          accruedDividend: dividend,
-          dividend,
-          accumulated,
-        });
-        quarterWindow = [];
-      } else {
-        quarterWindow.push({ cdi: row.cdi, factor });
-      }
-      return;
-    }
-
+    const accruedDividend = window.reduce((total, row) => {
+      const appliedRate = ruleRate(row.cdi, investor.rule);
+      return total + investor.invested * (appliedRate / 100) * row.factor;
+    }, 0);
+    const dividend = accruedDividend;
     accumulated += dividend;
     history.push({
-      month: row.month,
-      cdi: row.cdi,
-      appliedRate,
+      month: paymentMonth,
+      cdi: compoundedPercent(window.map((row) => row.cdi * row.factor)),
+      appliedRate: window.reduce((total, row) => total + ruleRate(row.cdi, investor.rule) * row.factor, 0),
       accruedDividend,
       dividend,
       accumulated,
     });
-  });
+  }
 
   return history;
 }
@@ -459,6 +529,7 @@ export function validateInvestorApiResponse(payload) {
             total_investido: raw.invested,
             tipo_rendimento: raw.rule,
             inicio_rendimento: raw.startDate || raw.startMonth,
+            fim_rendimento: raw.endDate || raw.endMonth,
             periodicidade_pagamento: raw.paymentFrequency,
             assessor: raw.advisorEmail,
             master: raw.masterEmail,
@@ -531,6 +602,59 @@ export function validateCdiRows(csvData) {
       data.push({
         month,
         cdi,
+      });
+    }
+  });
+
+  data.sort((a, b) => a.month.localeCompare(b.month));
+  return { data, errors };
+}
+
+export function validateIpcaRows(csvData) {
+  const file = "ipca.csv";
+  const required = ["mes", "ipca_percent"];
+  const headers = csvData?.headers || [];
+  const rows = csvData?.rows || [];
+  const errors = validateHeaders(headers, required, file);
+  if (!rows.length) {
+    errors.push(validationError("EMPTY_FILE", file, null, null, "CSV sem linhas de dados."));
+    return { data: [], errors };
+  }
+
+  const seenMonths = new Set();
+  const data = [];
+  rows.forEach((row) => {
+    const line = Number(row.__line) || null;
+    let hasRowError = false;
+    const month = safeTrim(row.mes);
+    if (!isValidMonthFormat(month)) {
+      errors.push(validationError("INVALID_MONTH", file, line, "mes", "Mes fora do formato YYYY-MM."));
+      hasRowError = true;
+    } else if (seenMonths.has(month)) {
+      errors.push(validationError("DUPLICATE_MONTH", file, line, "mes", `Mes duplicado: ${month}.`));
+      hasRowError = true;
+    } else {
+      seenMonths.add(month);
+    }
+
+    const ipca = parseNumeric(row.ipca_percent);
+    if (!Number.isFinite(ipca)) {
+      errors.push(
+        validationError(
+          "INVALID_NUMBER",
+          file,
+          line,
+          "ipca_percent",
+          "Numero invalido em ipca_percent."
+        )
+      );
+      hasRowError = true;
+    }
+
+    if (!hasRowError) {
+      data.push({
+        month,
+        cdi: ipca,
       });
     }
   });

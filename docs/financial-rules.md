@@ -5,7 +5,9 @@ Definir regras matematicas unicas para calculo mensal de dividendos.
 
 ## Entradas por investidor
 - `principal`: valor de `total_investido` (BRL).
-- `tipo_rendimento`: `CDI+N` ou `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`.
+- `tipo_rendimento`: `CDI+N`, `IPCA+N` ou `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`, `IPCA+9`.
+- `inicio_rendimento`: data inicial da apuracao.
+- `fim_rendimento`: data final opcional da apuracao.
 - `periodicidade_pagamento`: `mensal` ou `trimestral`.
 - Serie mensal de CDI: pares (`mes`, `cdi_percent`).
 
@@ -32,6 +34,7 @@ Valores de referencia aproximados:
 
 ## Taxa aplicada por tipo
 - `CDI+N` com pagamento `mensal`: `taxa_aplicada_percent = cdi_percent + spread_mensal_N`
+- `IPCA+N` com pagamento `mensal`: `taxa_aplicada_percent = ipca_percent + spread_mensal_N`
 - `1% a.m.`: `taxa_aplicada_percent = 1.00`
 
 ## Calculo mensal
@@ -43,6 +46,7 @@ Para cada mes `m`:
 
 ## Regra de pagamento
 - `mensal`: o valor calculado no mes e pago no proprio mes.
+- Se houver `fim_rendimento`, a ultima competencia mensal e limitada por essa data. Se o encerramento ocorrer no meio do mes, aplicar proporcionalidade no ultimo mes.
 - `trimestral`: o valor continua sendo apurado por janelas de 3 meses, contadas a partir de `inicio_rendimento`, mas o pagamento ocorre no mes seguinte ao fechamento dessa janela.
 - Exemplo: competencia `jul/ago/set` paga em `out`; `out/nov/dez` paga em `jan`.
 - Para `CDI+N` com `trimestral`, a taxa do trimestre e calculada como:
@@ -50,6 +54,7 @@ Para cada mes `m`:
   - mais o spread efetivo de `N% a.a.` convertido para o trimestre
 - No mes de pagamento trimestral, o valor pago corresponde ao trimestre imediatamente anterior.
 - Se o primeiro mes for parcial por conta de `inicio_rendimento` em `YYYY-MM-DD`, a proporcionalidade desse primeiro mes entra normalmente no primeiro fechamento trimestral.
+- Se houver `fim_rendimento`, a ultima janela pode ser parcial. Nesse caso, o sistema gera um pagamento final no mes seguinte ao ultimo mes de competencia apurado.
 - Para `1% a.m.` com `trimestral`, o sistema continua acumulando os 3 meses e pagando no mes seguinte ao fechamento do trimestre.
 - No frontend, investimentos trimestrais devem exibir apenas os meses em que ha pagamento efetivo.
 

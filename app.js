@@ -3,6 +3,7 @@ import {
   resolveViewerScope,
   safeTrim,
   validateCdiRows,
+  validateIpcaRows,
   validateIgpmRows,
   validateInvestorRows,
 } from "./src/business.mjs";
@@ -10,12 +11,14 @@ import {
 const DATA_FILES = {
   investors: "./data/investidores.csv",
   cdi: "./data/cdi.csv",
+  ipca: "./data/ipca.csv",
   igpm: "./data/igpm.csv",
 };
 
 const state = {
   investors: [],
   cdiSeries: [],
+  ipcaSeries: [],
   igpmSeries: [],
   viewerRole: "none",
   accessibleInvestors: [],
@@ -35,6 +38,7 @@ const els = {
   investorName: document.getElementById("investorName"),
   investorRule: document.getElementById("investorRule"),
   viewerBadge: document.getElementById("viewerBadge"),
+  investmentStatus: document.getElementById("investmentStatus"),
   investorPeriod: document.getElementById("investorPeriod"),
   accountSwitchWrap: document.getElementById("accountSwitchWrap"),
   accountSelect: document.getElementById("accountSelect"),
@@ -154,6 +158,25 @@ function monthLabel(monthValue) {
   return `${month}/${year.slice(-2)}`;
 }
 
+function isInvestorInactive(investor) {
+  const endDate = safeTrim(investor.endDate);
+  if (!endDate) return false;
+
+  const today = new Date();
+  const currentDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate()
+  ).padStart(2, "0")}`;
+
+  return endDate <= currentDate;
+}
+
+function seriesForInvestorRule(rule) {
+  if (safeTrim(rule).toUpperCase().startsWith("IPCA+")) {
+    return state.ipcaSeries;
+  }
+  return state.cdiSeries;
+}
+
 function logout() {
   state.viewerRole = "none";
   state.accessibleInvestors = [];
@@ -181,7 +204,7 @@ function roleLabel(role) {
 
 function investorAccountLabel(investor, index) {
   const sequence = String(index + 1).padStart(3, "0");
-  return `Aporte ${sequence} - ${investor.name}`;
+  return `Aporte ${sequence} - ${investor.name}${isInvestorInactive(investor) ? " (Inativo)" : ""}`;
 }
 
 function renderAccountSwitcher(activeId) {
@@ -293,7 +316,7 @@ function renderChart(history) {
 }
 
 function showDashboard(investor) {
-  const history = calculateHistory(investor, state.cdiSeries);
+  const history = calculateHistory(investor, seriesForInvestorRule(investor.rule));
   state.currentInvestor = investor;
   state.history = history;
 
@@ -305,6 +328,13 @@ function showDashboard(investor) {
   els.investorRule.textContent = investor.rule;
   if (els.viewerBadge) {
     els.viewerBadge.textContent = roleLabel(state.viewerRole);
+    els.viewerBadge.classList.remove("inactive");
+  }
+  if (els.investmentStatus) {
+    const inactive = isInvestorInactive(investor);
+    els.investmentStatus.textContent = "Inativo";
+    els.investmentStatus.classList.toggle("hidden", !inactive);
+    els.investmentStatus.classList.toggle("inactive", inactive);
   }
   const periodStart = history[0]?.month || "-";
   const periodEnd = history[history.length - 1]?.month || "-";
@@ -357,28 +387,38 @@ function handleLogin(event) {
 
 async function bootstrapData() {
   try {
-    setStatus("Carregando base de investidores, CDI e IGP-M...", "");
+    setStatus("Carregando base de investidores, CDI, IPCA e IGP-M...", "");
 
-    const [investorResponse, cdiResponse, igpmResponse] = await Promise.all([
+    const [investorResponse, cdiResponse, ipcaResponse, igpmResponse] = await Promise.all([
       fetch(DATA_FILES.investors, { cache: "no-store" }),
       fetch(DATA_FILES.cdi, { cache: "no-store" }),
+      fetch(DATA_FILES.ipca, { cache: "no-store" }),
       fetch(DATA_FILES.igpm, { cache: "no-store" }),
     ]);
 
-    if (!investorResponse.ok || !cdiResponse.ok || !igpmResponse.ok) {
-      throw new Error("Nao foi possivel ler os CSVs em data/investidores.csv, data/cdi.csv e data/igpm.csv.");
+    if (!investorResponse.ok || !cdiResponse.ok || !ipcaResponse.ok || !igpmResponse.ok) {
+      throw new Error(
+        "Nao foi possivel ler os CSVs em data/investidores.csv, data/cdi.csv, data/ipca.csv e data/igpm.csv."
+      );
     }
 
-    const [investorText, cdiText, igpmText] = await Promise.all([
+    const [investorText, cdiText, ipcaText, igpmText] = await Promise.all([
       investorResponse.text(),
       cdiResponse.text(),
+      ipcaResponse.text(),
       igpmResponse.text(),
     ]);
 
     const investorValidation = validateInvestorRows(parseCSV(investorText));
     const cdiValidation = validateCdiRows(parseCSV(cdiText));
+    const ipcaValidation = validateIpcaRows(parseCSV(ipcaText));
     const igpmValidation = validateIgpmRows(parseCSV(igpmText));
-    const errors = [...investorValidation.errors, ...cdiValidation.errors, ...igpmValidation.errors];
+    const errors = [
+      ...investorValidation.errors,
+      ...cdiValidation.errors,
+      ...ipcaValidation.errors,
+      ...igpmValidation.errors,
+    ];
 
     if (errors.length) {
       renderBootErrors(errors);
@@ -389,6 +429,7 @@ async function bootstrapData() {
     renderBootErrors([]);
     state.investors = investorValidation.data;
     state.cdiSeries = cdiValidation.data;
+    state.ipcaSeries = ipcaValidation.data;
     state.igpmSeries = igpmValidation.data;
     setStatus("", "");
   } catch (error) {

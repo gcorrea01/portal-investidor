@@ -24,13 +24,14 @@ Definir contratos fechados para ingestao de dados via CSV no portal.
 | `email` | string | Obrigatorio, formato de e-mail valido, comparacao case-insensitive, unico no arquivo. |
 | `nome` | string | Obrigatorio, tamanho minimo 2 caracteres apos trim. |
 | `total_investido` | numero | Obrigatorio, decimal em BRL, maior que 0. |
-| `tipo_rendimento` | string | Obrigatorio. Atualmente suportado: `CDI+N` e `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`. |
+| `tipo_rendimento` | string | Obrigatorio. Atualmente suportado: `CDI+N`, `IPCA+N` e `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`, `IPCA+9`. |
 | `inicio_rendimento` | string | Obrigatorio, formato `YYYY-MM` ou `YYYY-MM-DD`. |
 | `periodicidade_pagamento` | string | Obrigatorio, apenas: `mensal` ou `trimestral`. |
 
 ### Colunas opcionais
 | Coluna | Tipo | Regra |
 | --- | --- | --- |
+| `fim_rendimento` | string | Opcional, formato `YYYY-MM` ou `YYYY-MM-DD`. Quando informado, encerra a apuracao a partir dessa data. |
 | `usinas` | string | Opcional, lista separada por `|`. |
 | `assessor` | string | Opcional, e-mail valido quando informado. |
 | `master` | string | Opcional, e-mail valido quando informado. |
@@ -40,16 +41,18 @@ Definir contratos fechados para ingestao de dados via CSV no portal.
 - `nome`: aplicar `trim` e colapsar espacos duplicados internos.
 - `tipo_rendimento`: aplicar `trim`; mapear variacoes abaixo para canonical:
   - entradas contendo `cdi` e `+N` -> `CDI+N`
+  - entradas contendo `ipca` e `+N` -> `IPCA+N`
   - entradas contendo `1%`, `1.0`, `1,0` e `a.m` -> `1% a.m.`
 - `inicio_rendimento`: aceitar `YYYY-MM` ou `YYYY-MM-DD`.
+- `fim_rendimento`: aceitar `YYYY-MM` ou `YYYY-MM-DD`; quando informado, nao pode ser anterior a `inicio_rendimento`.
 - `periodicidade_pagamento`: aceitar apenas `mensal` e `trimestral`, com normalizacao para lowercase.
 
 ### Exemplo valido
 ```csv
-email,nome,total_investido,tipo_rendimento,inicio_rendimento,periodicidade_pagamento,assessor,master
-ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,2025-09-18,mensal,assessor@sunnyhub.com,master@sunnyhub.com
-bruno@sunnyhub.com,Bruno Siqueira,90000.00,CDI+5,2025-10-01,trimestral,assessor@sunnyhub.com,master@sunnyhub.com
-carla@sunnyhub.com,Carla Menezes,65000.00,1% a.m.,2025-06,mensal,,
+email,nome,total_investido,tipo_rendimento,inicio_rendimento,fim_rendimento,periodicidade_pagamento,assessor,master
+ana@sunnyhub.com,Ana Duarte,150000.00,CDI+3,2025-09-18,,mensal,assessor@sunnyhub.com,master@sunnyhub.com
+bruno@sunnyhub.com,Bruno Siqueira,90000.00,CDI+5,2025-10-01,2026-12-31,trimestral,assessor@sunnyhub.com,master@sunnyhub.com
+carla@sunnyhub.com,Carla Menezes,65000.00,1% a.m.,2025-06,,mensal,,
 ```
 
 ### Exemplos invalidos
@@ -139,5 +142,6 @@ Erro: mes duplicado.
 | `INVALID_NUMBER` | Numero invalido em campos numericos. |
 | `INVALID_RULE` | Tipo de rendimento fora das regras aceitas. |
 | `INVALID_PAYMENT_FREQUENCY` | Periodicidade de pagamento fora das regras aceitas. |
+| `INVALID_DATE_RANGE` | `fim_rendimento` anterior a `inicio_rendimento`. |
 | `INVALID_PLANTS_FIELD` | Campo `usinas` com separacao invalida. |
 | `EMPTY_FILE` | CSV sem linhas de dados. |

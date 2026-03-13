@@ -273,6 +273,15 @@ input:focus-visible {
   font-weight: 700;
 }
 
+.meta-pill.inactive {
+  border-color: rgba(157, 63, 0, 0.2);
+  background: rgba(157, 63, 0, 0.1);
+}
+
+.meta-pill.hidden {
+  display: none;
+}
+
 .account-switch {
   margin-top: 12px;
   display: grid;

@@ -25,12 +25,12 @@ test("investor database import creates schema and preserves repeated emails", as
     schema: schemaPath,
   });
 
-  assert.equal(result.importedRows, 10);
+  assert.equal(result.importedRows, 12);
 
   const db = new DatabaseSync(dbPath);
   try {
     const countRow = db.prepare("SELECT COUNT(*) AS total FROM investors").get();
-    assert.equal(countRow.total, 10);
+    assert.equal(countRow.total, 12);
 
     const duplicateEmailRow = db
       .prepare("SELECT COUNT(*) AS total FROM investors WHERE email = ?")
@@ -44,6 +44,7 @@ test("investor database import creates schema and preserves repeated emails", as
       "total_investido",
       "tipo_rendimento",
       "inicio_rendimento",
+      "fim_rendimento",
       "periodicidade_pagamento",
       "assessor",
       "master",

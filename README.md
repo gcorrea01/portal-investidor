@@ -37,6 +37,7 @@ Observacao: abrir `index.html` direto em `file://` pode bloquear leitura dos CSV
 ## Dados usados em runtime
 - `data/investidores.csv`
 - `data/cdi.csv`
+- `data/ipca.csv`
 - `data/igpm.csv`
 
 ## Banco de investidores

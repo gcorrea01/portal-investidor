@@ -13,6 +13,7 @@ const staticEntries = [
   "LOGOTIPO LARANJA.png",
   "data/investidores.csv",
   "data/cdi.csv",
+  "data/ipca.csv",
   "data/igpm.csv",
   "src",
 ];

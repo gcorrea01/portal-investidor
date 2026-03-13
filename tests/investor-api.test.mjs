@@ -20,6 +20,7 @@ function createTempDatabase() {
       total_investido REAL NOT NULL,
       tipo_rendimento TEXT NOT NULL,
       inicio_rendimento TEXT NOT NULL,
+      fim_rendimento TEXT,
       periodicidade_pagamento TEXT NOT NULL,
       assessor TEXT,
       master TEXT
@@ -33,10 +34,11 @@ function createTempDatabase() {
       total_investido,
       tipo_rendimento,
       inicio_rendimento,
+      fim_rendimento,
       periodicidade_pagamento,
       assessor,
       master
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insert.run(
@@ -45,6 +47,7 @@ function createTempDatabase() {
     50000,
     "CDI+5",
     "2025-08-01",
+    null,
     "mensal",
     "assessor@empresa.com",
     "master@empresa.com"
@@ -55,6 +58,7 @@ function createTempDatabase() {
     100000,
     "CDI+3",
     "2025-09-15",
+    null,
     "mensal",
     "assessor@empresa.com",
     "master@empresa.com"
@@ -65,6 +69,7 @@ function createTempDatabase() {
     30000,
     "1% a.m.",
     "2025-10-01",
+    null,
     "trimestral",
     "assessor@empresa.com",
     "master@empresa.com"

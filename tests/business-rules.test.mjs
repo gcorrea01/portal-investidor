@@ -9,6 +9,7 @@ import {
   resolveViewerScope,
   ruleRate,
   validateCdiRows,
+  validateIpcaRows,
   validateInvestorApiResponse,
   validateIgpmRows,
   validateInvestorRows,
@@ -49,6 +50,14 @@ test("CDI+7 rate matches CDI plus monthly equivalent spread", () => {
 test("1% a.m. rule always applies fixed 1 percent", () => {
   assert.equal(ruleRate(0.4, "1% a.m."), 1);
   assert.equal(ruleRate(1.2, "1% a.m."), 1);
+});
+
+test("IPCA+9 rate matches IPCA plus monthly equivalent spread", () => {
+  const ipca = 0.56;
+  const expectedSpread = annualSpreadToMonthly(9);
+  const appliedRate = ruleRate(ipca, "IPCA+9");
+
+  assert.ok(Math.abs(appliedRate - (ipca + expectedSpread)) < 1e-12);
 });
 
 test("calculateHistory keeps simple-interest principal and accumulated dividends", () => {
@@ -109,6 +118,51 @@ test("calculateHistory applies pro rata on first month when start is mid-month",
   assert.equal(history.length, 2);
   assert.ok(Math.abs(history[0].dividend - 5) < 1e-9);
   assert.ok(Math.abs(history[1].dividend - 10) < 1e-9);
+});
+
+test("calculateHistory applies end date to monthly investment", () => {
+  const investor = {
+    invested: 1000,
+    rule: "1% a.m.",
+    startDate: "2026-01-01",
+    endDate: "2026-02-10",
+    paymentFrequency: "mensal",
+  };
+
+  const cdiSeries = [
+    { month: "2026-01", cdi: 0.8 },
+    { month: "2026-02", cdi: 0.7 },
+    { month: "2026-03", cdi: 0.6 },
+  ];
+
+  const history = calculateHistory(investor, cdiSeries);
+
+  assert.equal(history.length, 2);
+  assert.equal(history[0].month, "2026-01");
+  assert.equal(history[0].dividend, 10);
+  assert.ok(Math.abs(history[1].dividend - (10 / 28) * 10) < 1e-9);
+});
+
+test("calculateHistory pays final partial trimestre in month after end date", () => {
+  const investor = {
+    invested: 1000,
+    rule: "1% a.m.",
+    paymentFrequency: "trimestral",
+    startDate: "2026-01-01",
+    endDate: "2026-02-10",
+  };
+
+  const cdiSeries = [
+    { month: "2026-01", cdi: 0.8 },
+    { month: "2026-02", cdi: 0.7 },
+    { month: "2026-03", cdi: 0.6 },
+  ];
+
+  const history = calculateHistory(investor, cdiSeries);
+
+  assert.equal(history.length, 1);
+  assert.equal(history[0].month, "2026-03");
+  assert.ok(Math.abs(history[0].dividend - (10 + (10 / 28) * 10)) < 1e-9);
 });
 
 test("calculateHistory pays CDI+7 trimestral with quarter rate on quarter close", () => {
@@ -187,6 +241,33 @@ test("calculateHistory pays CDI+5 trimestral with quarter rate on quarter close"
   assert.ok(Math.abs(history[0].dividend - 1000 * (expectedAppliedRate / 100)) < 1e-9);
 });
 
+test("calculateHistory does not expose incomplete future quarter without end date", () => {
+  const investor = {
+    invested: 1000,
+    rule: "CDI+7",
+    paymentFrequency: "trimestral",
+    startDate: "2025-07-01",
+  };
+
+  const cdiSeries = [
+    { month: "2025-07", cdi: 1 },
+    { month: "2025-08", cdi: 1 },
+    { month: "2025-09", cdi: 1 },
+    { month: "2025-10", cdi: 1 },
+    { month: "2025-11", cdi: 1 },
+    { month: "2025-12", cdi: 1 },
+    { month: "2026-01", cdi: 1 },
+    { month: "2026-02", cdi: 1 },
+  ];
+
+  const history = calculateHistory(investor, cdiSeries);
+
+  assert.deepEqual(
+    history.map((item) => item.month),
+    ["2025-10", "2026-01"]
+  );
+});
+
 test("validateCdiRows rejects duplicate month", () => {
   const csvData = {
     headers: ["mes", "cdi_percent"],
@@ -235,6 +316,48 @@ test("validateIgpmRows rejects duplicate month", () => {
 
   const result = validateIgpmRows(csvData);
   assert.ok(result.errors.some((error) => error.code === "DUPLICATE_MONTH"));
+});
+
+test("validateIpcaRows accepts valid monthly series", () => {
+  const csvData = {
+    headers: ["mes", "ipca_percent"],
+    rows: [
+      { __line: 2, mes: "2025-12", ipca_percent: "0.33" },
+      { __line: 3, mes: "2026-01", ipca_percent: "0.33" },
+    ],
+  };
+
+  const result = validateIpcaRows(csvData);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data.length, 2);
+});
+
+test("validateInvestorRows accepts IPCA+9 mensal", () => {
+  const csvData = {
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "periodicidade_pagamento",
+    ],
+    rows: [
+      {
+        __line: 2,
+        email: "ipca@x.com",
+        nome: "Cliente IPCA",
+        total_investido: "1000",
+        tipo_rendimento: "IPCA+9",
+        inicio_rendimento: "2026-01-01",
+        periodicidade_pagamento: "mensal",
+      },
+    ],
+  };
+
+  const result = validateInvestorRows(csvData);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data[0].rule, "IPCA+9");
 });
 
 test("validateInvestorRows accepts optional assessor/master and repeated investor email", () => {
@@ -306,6 +429,65 @@ test("validateInvestorRows accepts CDI+7 trimestral", () => {
   const result = validateInvestorRows(csvData);
   assert.equal(result.errors.length, 0);
   assert.equal(result.data[0].rule, "CDI+7");
+});
+
+test("validateInvestorRows accepts optional fim_rendimento", () => {
+  const csvData = {
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "fim_rendimento",
+      "periodicidade_pagamento",
+    ],
+    rows: [
+      {
+        __line: 2,
+        email: "cliente@x.com",
+        nome: "Cliente",
+        total_investido: "1000",
+        tipo_rendimento: "CDI+4",
+        inicio_rendimento: "2026-01-01",
+        fim_rendimento: "2026-06-15",
+        periodicidade_pagamento: "mensal",
+      },
+    ],
+  };
+
+  const result = validateInvestorRows(csvData);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data[0].endDate, "2026-06-15");
+});
+
+test("validateInvestorRows rejects fim_rendimento before inicio_rendimento", () => {
+  const csvData = {
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "fim_rendimento",
+      "periodicidade_pagamento",
+    ],
+    rows: [
+      {
+        __line: 2,
+        email: "cliente@x.com",
+        nome: "Cliente",
+        total_investido: "1000",
+        tipo_rendimento: "CDI+4",
+        inicio_rendimento: "2026-06-15",
+        fim_rendimento: "2026-06-10",
+        periodicidade_pagamento: "mensal",
+      },
+    ],
+  };
+
+  const result = validateInvestorRows(csvData);
+  assert.ok(result.errors.some((error) => error.code === "INVALID_DATE_RANGE"));
 });
 
 test("validateInvestorRows rejects impossible start date", () => {
