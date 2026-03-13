@@ -33,3 +33,16 @@ test("index references local assets that exist", async () => {
   await Promise.all(localAssets.map((asset) => access(path.join(rootDir, decodeURIComponent(asset)))));
   assert.ok(localAssets.length > 0, "Expected at least one local asset reference");
 });
+
+test("app runtime no longer depends on investidores.csv", async () => {
+  const appPath = path.join(rootDir, "app.js");
+  const appSource = await readFile(appPath, "utf8");
+  const indexPath = path.join(rootDir, "index.html");
+  const indexSource = await readFile(indexPath, "utf8");
+
+  assert.doesNotMatch(appSource, /data\/investidores\.csv/);
+  assert.match(appSource, /\/api\/viewer/);
+  assert.match(appSource, /\/api\/health/);
+  assert.doesNotMatch(indexSource, /data-investors-health-api-url=/);
+  assert.doesNotMatch(indexSource, /data-investors-viewer-api-url=/);
+});

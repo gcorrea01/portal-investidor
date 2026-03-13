@@ -8,8 +8,11 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
+    "serve:api": "node server.mjs",
     "test": "node --test",
     "build": "node scripts/build.mjs",
+    "db:investors:import": "node scripts/import-investors-db.mjs",
+    "db:investors:reset": "node scripts/reset-investors-db.mjs",
     "quality": "npm run lint && npm run test && npm run build",
     "test:coverage": "node --test --experimental-test-coverage"
   },

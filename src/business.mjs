@@ -119,78 +119,7 @@ function validateHeaders(headers, required, file) {
   return errors;
 }
 
-export function calculateHistory(investor, cdiSeries) {
-  const parsedStart = parseStartDate(investor.startDate || investor.startMonth);
-  const startMonth = parsedStart?.monthKey || "";
-  const startDay = parsedStart?.day || 1;
-  const paymentFrequency = normalizePaymentFrequencyStrict(investor.paymentFrequency) || "mensal";
-  const scopedSeries = startMonth
-    ? cdiSeries.filter((row) => row.month >= startMonth)
-    : cdiSeries;
-  let accumulated = 0;
-  let payableCarry = 0;
-
-  return scopedSeries.map((row) => {
-    const appliedRate = ruleRate(row.cdi, investor.rule);
-    let factor = 1;
-    if (parsedStart && row.month === startMonth && startDay > 1) {
-      const activeDays = daysInMonthUTC(parsedStart.year, parsedStart.month) - startDay + 1;
-      factor = Math.max(0, Math.min(1, activeDays / daysInMonthUTC(parsedStart.year, parsedStart.month)));
-    }
-    const accruedDividend = investor.invested * (appliedRate / 100) * factor;
-    payableCarry += accruedDividend;
-
-    let dividend = accruedDividend;
-    if (paymentFrequency === "trimestral") {
-      const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : 0;
-      const isQuarterClose = monthsSinceStart >= 0 && (monthsSinceStart + 1) % 3 === 0;
-      dividend = isQuarterClose ? payableCarry : 0;
-      if (isQuarterClose) {
-        payableCarry = 0;
-      }
-    }
-
-    accumulated += dividend;
-
-    return {
-      month: row.month,
-      cdi: row.cdi,
-      appliedRate,
-      accruedDividend,
-      dividend,
-      accumulated,
-    };
-  });
-}
-
-export function resolveViewerScope(loginEmail, investors) {
-  const email = safeTrim(loginEmail).toLowerCase();
-  if (!email) return { role: "none", investors: [] };
-
-  const all = Array.isArray(investors) ? investors : [];
-  const ownMatches = all.filter((item) => item.email === email);
-  const isMaster = all.some((item) => item.masterEmail && item.masterEmail === email);
-  const advisorMatches = all.filter((item) => item.advisorEmail && item.advisorEmail === email);
-
-  if (isMaster) {
-    return { role: "master", investors: all };
-  }
-
-  if (advisorMatches.length) {
-    const merged = [...advisorMatches, ...ownMatches];
-    const unique = [...new Set(merged)];
-    return { role: "assessor", investors: unique };
-  }
-
-  if (ownMatches.length) {
-    return { role: "investor", investors: ownMatches };
-  }
-
-  return { role: "none", investors: [] };
-}
-
-export function validateInvestorRows(csvData) {
-  const file = "investidores.csv";
+function validateInvestorDataset(file, headers, rows) {
   const required = [
     "email",
     "nome",
@@ -200,8 +129,6 @@ export function validateInvestorRows(csvData) {
     "periodicidade_pagamento",
   ];
   const optional = ["usinas", "assessor", "master"];
-  const headers = csvData?.headers || [];
-  const rows = csvData?.rows || [];
   const errors = [];
   required.forEach((col) => {
     if (!headers.includes(col)) {
@@ -218,14 +145,14 @@ export function validateInvestorRows(csvData) {
     }
   });
   if (!rows.length) {
-    errors.push(validationError("EMPTY_FILE", file, null, null, "CSV sem linhas de dados."));
+    errors.push(validationError("EMPTY_FILE", file, null, null, "Base sem linhas de dados."));
     return { data: [], errors };
   }
 
   const data = [];
 
-  rows.forEach((row) => {
-    const line = Number(row.__line) || null;
+  rows.forEach((row, index) => {
+    const line = Number(row.__line) || index + 1;
     let hasRowError = false;
     const email = safeTrim(row.email).toLowerCase();
     if (!isValidEmail(email)) {
@@ -331,6 +258,146 @@ export function validateInvestorRows(csvData) {
   });
 
   return { data, errors };
+}
+
+export function calculateHistory(investor, cdiSeries) {
+  const parsedStart = parseStartDate(investor.startDate || investor.startMonth);
+  const startMonth = parsedStart?.monthKey || "";
+  const startDay = parsedStart?.day || 1;
+  const paymentFrequency = normalizePaymentFrequencyStrict(investor.paymentFrequency) || "mensal";
+  const scopedSeries = startMonth
+    ? cdiSeries.filter((row) => row.month >= startMonth)
+    : cdiSeries;
+  let accumulated = 0;
+  let payableCarry = 0;
+
+  return scopedSeries.map((row) => {
+    const appliedRate = ruleRate(row.cdi, investor.rule);
+    let factor = 1;
+    if (parsedStart && row.month === startMonth && startDay > 1) {
+      const activeDays = daysInMonthUTC(parsedStart.year, parsedStart.month) - startDay + 1;
+      factor = Math.max(0, Math.min(1, activeDays / daysInMonthUTC(parsedStart.year, parsedStart.month)));
+    }
+    const accruedDividend = investor.invested * (appliedRate / 100) * factor;
+    payableCarry += accruedDividend;
+
+    let dividend = accruedDividend;
+    if (paymentFrequency === "trimestral") {
+      const monthsSinceStart = parsedStart ? monthDiff(startMonth, row.month) : 0;
+      const isQuarterClose = monthsSinceStart >= 0 && (monthsSinceStart + 1) % 3 === 0;
+      dividend = isQuarterClose ? payableCarry : 0;
+      if (isQuarterClose) {
+        payableCarry = 0;
+      }
+    }
+
+    accumulated += dividend;
+
+    return {
+      month: row.month,
+      cdi: row.cdi,
+      appliedRate,
+      accruedDividend,
+      dividend,
+      accumulated,
+    };
+  });
+}
+
+export function resolveViewerScope(loginEmail, investors) {
+  const email = safeTrim(loginEmail).toLowerCase();
+  if (!email) return { role: "none", investors: [] };
+
+  const all = Array.isArray(investors) ? investors : [];
+  const ownMatches = all.filter((item) => item.email === email);
+  const isMaster = all.some((item) => item.masterEmail && item.masterEmail === email);
+  const advisorMatches = all.filter((item) => item.advisorEmail && item.advisorEmail === email);
+
+  if (isMaster) {
+    return { role: "master", investors: all };
+  }
+
+  if (advisorMatches.length) {
+    const merged = [...advisorMatches, ...ownMatches];
+    const unique = [...new Set(merged)];
+    return { role: "assessor", investors: unique };
+  }
+
+  if (ownMatches.length) {
+    return { role: "investor", investors: ownMatches };
+  }
+
+  return { role: "none", investors: [] };
+}
+
+export function validateInvestorRows(csvData) {
+  const file = "investidores.csv";
+  const headers = csvData?.headers || [];
+  const rows = csvData?.rows || [];
+  return validateInvestorDataset(file, headers, rows);
+}
+
+export function validateInvestorApiResponse(payload) {
+  const file = "api/viewer";
+  const source = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.investors)
+      ? payload.investors
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : null;
+
+  if (!source) {
+    return {
+      data: [],
+      errors: [
+        validationError(
+          "INVALID_API_PAYLOAD",
+          file,
+          null,
+          null,
+          "Resposta da API deve ser um array ou objeto com a lista em investors/data."
+        ),
+      ],
+    };
+  }
+
+  const rows = source.map((row, index) => {
+    const raw = row || {};
+    const mappedRow =
+      "nome" in raw || "total_investido" in raw
+        ? raw
+        : {
+            email: raw.email,
+            nome: raw.name,
+            total_investido: raw.invested,
+            tipo_rendimento: raw.rule,
+            inicio_rendimento: raw.startDate || raw.startMonth,
+            periodicidade_pagamento: raw.paymentFrequency,
+            assessor: raw.advisorEmail,
+            master: raw.masterEmail,
+          };
+
+    return {
+      ...mappedRow,
+      id: raw.id,
+      __line: index + 1,
+    };
+  });
+  const headers = [...new Set(rows.flatMap((row) => Object.keys(row || {})))].filter(
+    (header) => header !== "__line" && header !== "id"
+  );
+  const validationRows = rows.map((row, index) => ({
+    ...row,
+    __line: index + 1,
+  }));
+
+  const result = validateInvestorDataset(file, headers, validationRows);
+  result.data = result.data.map((item, index) => ({
+    ...item,
+    id: safeTrim(rows[index]?.id) || item.id,
+  }));
+  return result;
 }
 
 export function validateCdiRows(csvData) {

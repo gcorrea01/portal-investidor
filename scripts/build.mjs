@@ -6,16 +6,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const distDir = path.join(rootDir, "dist");
 
-const staticEntries = ["index.html", "styles.css", "app.js", "LOGOTIPO LARANJA.png", "data", "src"];
+const staticEntries = [
+  "index.html",
+  "styles.css",
+  "app.js",
+  "LOGOTIPO LARANJA.png",
+  "data/cdi.csv",
+  "data/igpm.csv",
+  "src",
+];
 
 async function main() {
   await rm(distDir, { recursive: true, force: true });
   await mkdir(distDir, { recursive: true });
 
   await Promise.all(
-    staticEntries.map((entry) => {
+    staticEntries.map(async (entry) => {
       const src = path.join(rootDir, entry);
       const dest = path.join(distDir, entry);
+      await mkdir(path.dirname(dest), { recursive: true });
       return cp(src, dest, { recursive: true });
     })
   );

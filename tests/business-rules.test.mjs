@@ -8,6 +8,7 @@ import {
   resolveViewerScope,
   ruleRate,
   validateCdiRows,
+  validateInvestorApiResponse,
   validateIgpmRows,
   validateInvestorRows,
 } from "../src/business.mjs";
@@ -219,6 +220,54 @@ test("validateInvestorRows rejects impossible start date", () => {
 
   const result = validateInvestorRows(csvData);
   assert.ok(result.errors.some((error) => error.code === "INVALID_DATE"));
+});
+
+test("validateInvestorApiResponse accepts array payload with current investor fields", () => {
+  const payload = [
+    {
+      email: "ana@sunnyhub.com",
+      nome: "Ana Duarte",
+      total_investido: "150000.00",
+      tipo_rendimento: "CDI+3",
+      inicio_rendimento: "2025-09-18",
+      periodicidade_pagamento: "mensal",
+      assessor: "assessor@sunnyhub.com",
+      master: "master@sunnyhub.com",
+    },
+  ];
+
+  const result = validateInvestorApiResponse(payload);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].email, "ana@sunnyhub.com");
+});
+
+test("validateInvestorApiResponse accepts normalized backend viewer payload", () => {
+  const payload = {
+    investors: [
+      {
+        id: "inv-7",
+        email: "bruno@sunnyhub.com",
+        name: "Bruno Siqueira",
+        invested: 90000,
+        rule: "CDI+5",
+        startDate: "2025-10-01",
+        paymentFrequency: "trimestral",
+        advisorEmail: "assessor@sunnyhub.com",
+        masterEmail: "master@sunnyhub.com",
+      },
+    ],
+  };
+
+  const result = validateInvestorApiResponse(payload);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data[0].id, "inv-7");
+  assert.equal(result.data[0].paymentFrequency, "trimestral");
+});
+
+test("validateInvestorApiResponse rejects payload without investors list", () => {
+  const result = validateInvestorApiResponse({ items: [] });
+  assert.ok(result.errors.some((error) => error.code === "INVALID_API_PAYLOAD"));
 });
 
 test("resolveViewerScope returns only associated rows for assessor", () => {
