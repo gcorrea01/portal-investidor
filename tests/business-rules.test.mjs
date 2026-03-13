@@ -60,6 +60,10 @@ test("IPCA+9 rate matches IPCA plus monthly equivalent spread", () => {
   assert.ok(Math.abs(appliedRate - (ipca + expectedSpread)) < 1e-12);
 });
 
+test("IGPM rule starts at fixed 1 percent per month", () => {
+  assert.equal(ruleRate(0.4, "IGPM"), 1);
+});
+
 test("calculateHistory keeps simple-interest principal and accumulated dividends", () => {
   const investor = {
     invested: 1000,
@@ -141,6 +145,63 @@ test("calculateHistory applies end date to monthly investment", () => {
   assert.equal(history[0].month, "2026-01");
   assert.equal(history[0].dividend, 10);
   assert.ok(Math.abs(history[1].dividend - (10 / 28) * 10) < 1e-9);
+});
+
+test("calculateHistory adjusts IGPM monthly payment after positive 12-month variation", () => {
+  const investor = {
+    invested: 1000,
+    rule: "IGPM",
+    paymentFrequency: "mensal",
+    startDate: "2025-01-01",
+  };
+
+  const igpmSeries = Array.from({ length: 13 }, (_, index) => ({
+    month: `2025-${String(index + 1).padStart(2, "0")}`,
+    igpm: 1,
+  }));
+
+  igpmSeries[12] = { month: "2026-01", igpm: 0.5 };
+
+  const history = calculateHistory(investor, igpmSeries);
+  const expectedAdjustedRate = 1 * Math.pow(1.01, 12);
+
+  assert.equal(history.length, 13);
+  assert.equal(history[11].appliedRate, 1);
+  assert.equal(history[12].month, "2026-01");
+  assert.ok(Math.abs(history[12].appliedRate - expectedAdjustedRate) < 1e-9);
+  assert.ok(Math.abs(history[12].dividend - 1000 * (expectedAdjustedRate / 100)) < 1e-9);
+});
+
+test("calculateHistory keeps IGPM monthly payment unchanged after negative 12-month variation", () => {
+  const investor = {
+    invested: 1000,
+    rule: "IGPM",
+    paymentFrequency: "mensal",
+    startDate: "2025-01-01",
+  };
+
+  const igpmSeries = [
+    { month: "2025-01", igpm: -1.0 },
+    { month: "2025-02", igpm: -0.8 },
+    { month: "2025-03", igpm: -0.7 },
+    { month: "2025-04", igpm: -0.6 },
+    { month: "2025-05", igpm: -0.5 },
+    { month: "2025-06", igpm: -0.4 },
+    { month: "2025-07", igpm: -0.3 },
+    { month: "2025-08", igpm: -0.2 },
+    { month: "2025-09", igpm: -0.1 },
+    { month: "2025-10", igpm: -0.2 },
+    { month: "2025-11", igpm: -0.3 },
+    { month: "2025-12", igpm: -0.4 },
+    { month: "2026-01", igpm: 0.5 },
+  ];
+
+  const history = calculateHistory(investor, igpmSeries);
+
+  assert.equal(history.length, 13);
+  assert.equal(history[11].appliedRate, 1);
+  assert.equal(history[12].appliedRate, 1);
+  assert.equal(history[12].dividend, 10);
 });
 
 test("calculateHistory pays final partial trimestre in month after end date", () => {
@@ -358,6 +419,61 @@ test("validateInvestorRows accepts IPCA+9 mensal", () => {
   const result = validateInvestorRows(csvData);
   assert.equal(result.errors.length, 0);
   assert.equal(result.data[0].rule, "IPCA+9");
+});
+
+test("validateInvestorRows accepts IGPM mensal", () => {
+  const csvData = {
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "periodicidade_pagamento",
+    ],
+    rows: [
+      {
+        __line: 2,
+        email: "igpm@x.com",
+        nome: "Cliente IGPM",
+        total_investido: "1000",
+        tipo_rendimento: "IGP-M",
+        inicio_rendimento: "2026-01-01",
+        periodicidade_pagamento: "mensal",
+      },
+    ],
+  };
+
+  const result = validateInvestorRows(csvData);
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.data[0].rule, "IGPM");
+});
+
+test("validateInvestorRows rejects IGPM trimestral", () => {
+  const csvData = {
+    headers: [
+      "email",
+      "nome",
+      "total_investido",
+      "tipo_rendimento",
+      "inicio_rendimento",
+      "periodicidade_pagamento",
+    ],
+    rows: [
+      {
+        __line: 2,
+        email: "igpm@x.com",
+        nome: "Cliente IGPM",
+        total_investido: "1000",
+        tipo_rendimento: "IGPM",
+        inicio_rendimento: "2026-01-01",
+        periodicidade_pagamento: "trimestral",
+      },
+    ],
+  };
+
+  const result = validateInvestorRows(csvData);
+  assert.ok(result.errors.some((error) => error.code === "INVALID_PAYMENT_FREQUENCY"));
 });
 
 test("validateInvestorRows accepts optional assessor/master and repeated investor email", () => {

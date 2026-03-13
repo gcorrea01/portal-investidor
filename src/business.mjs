@@ -50,12 +50,17 @@ function extractIpcaSpread(rule) {
   return Number.isFinite(spread) ? spread : Number.NaN;
 }
 
+function isIgpmRule(rule) {
+  return /^igp-?m$/i.test(safeTrim(rule));
+}
+
 function normalizeRuleStrict(rule) {
   const value = safeTrim(rule).toLowerCase();
   const spread = extractCdiSpread(rule);
   if (Number.isFinite(spread)) return `CDI+${spread}`;
   const ipcaSpread = extractIpcaSpread(rule);
   if (Number.isFinite(ipcaSpread)) return `IPCA+${ipcaSpread}`;
+  if (isIgpmRule(value)) return "IGPM";
   if (value.includes("1%") || value.includes("1.0") || value.includes("1,0")) return "1% a.m.";
   return "";
 }
@@ -69,6 +74,7 @@ export function ruleRate(cdiPercent, rule) {
   if (Number.isFinite(cdiSpread)) return cdiPercent + annualSpreadToMonthly(cdiSpread);
   const ipcaSpread = extractIpcaSpread(rule);
   if (Number.isFinite(ipcaSpread)) return cdiPercent + annualSpreadToMonthly(ipcaSpread);
+  if (isIgpmRule(rule)) return 1;
   if (rule === "1% a.m.") return 1;
   return cdiPercent;
 }
@@ -144,11 +150,11 @@ function compoundedPercent(values) {
   ) * 100;
 }
 
-function buildAccrualSeries(cdiSeries, parsedStart, parsedEnd) {
+function buildAccrualSeries(rateSeries, parsedStart, parsedEnd) {
   const startMonth = parsedStart?.monthKey || "";
   const endMonth = parsedEnd?.monthKey || "";
 
-  return cdiSeries
+  return rateSeries
     .filter((row) => {
       if (startMonth && row.month < startMonth) return false;
       if (endMonth && row.month > endMonth) return false;
@@ -170,7 +176,7 @@ function buildAccrualSeries(cdiSeries, parsedStart, parsedEnd) {
 
       return {
         month: row.month,
-        cdi: row.cdi,
+        cdi: row.cdi ?? row.igpm,
         factor,
       };
     })
@@ -304,6 +310,18 @@ function validateInvestorDataset(file, headers, rows) {
       );
       hasRowError = true;
     }
+    if (normalizedRule === "IGPM" && paymentFrequency && paymentFrequency !== "mensal") {
+      errors.push(
+        validationError(
+          "INVALID_PAYMENT_FREQUENCY",
+          file,
+          line,
+          "periodicidade_pagamento",
+          "Investimentos IGPM devem usar periodicidade mensal."
+        )
+      );
+      hasRowError = true;
+    }
 
     const startRaw = safeTrim(row.inicio_rendimento);
     const parsedStart = parseStartDate(startRaw);
@@ -394,6 +412,34 @@ export function calculateHistory(investor, rateSeries) {
   const history = [];
 
   if (paymentFrequency === "mensal") {
+    if (isIgpmRule(investor.rule)) {
+      let igpmAdjustmentFactor = 1;
+      accrualSeries.forEach((row, index) => {
+        if (index > 0 && index % 12 === 0) {
+          const previousWindow = accrualSeries.slice(index - 12, index);
+          const annualIgpmRate = compoundedPercent(previousWindow.map((item) => item.cdi));
+          if (annualIgpmRate > 0) {
+            igpmAdjustmentFactor *= 1 + annualIgpmRate / 100;
+          }
+        }
+
+        const appliedRate = 1 * igpmAdjustmentFactor;
+        const accruedDividend = investor.invested * (appliedRate / 100) * row.factor;
+        const dividend = accruedDividend;
+        accumulated += dividend;
+        history.push({
+          month: row.month,
+          cdi: row.cdi,
+          appliedRate,
+          accruedDividend,
+          dividend,
+          accumulated,
+        });
+      });
+
+      return history;
+    }
+
     accrualSeries.forEach((row) => {
       const appliedRate = ruleRate(row.cdi, investor.rule);
       const accruedDividend = investor.invested * (appliedRate / 100) * row.factor;

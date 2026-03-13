@@ -24,7 +24,7 @@ Definir contratos fechados para ingestao de dados via CSV no portal.
 | `email` | string | Obrigatorio, formato de e-mail valido, comparacao case-insensitive, unico no arquivo. |
 | `nome` | string | Obrigatorio, tamanho minimo 2 caracteres apos trim. |
 | `total_investido` | numero | Obrigatorio, decimal em BRL, maior que 0. |
-| `tipo_rendimento` | string | Obrigatorio. Atualmente suportado: `CDI+N`, `IPCA+N` e `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`, `IPCA+9`. |
+| `tipo_rendimento` | string | Obrigatorio. Atualmente suportado: `CDI+N`, `IPCA+N`, `IGPM` e `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`, `IPCA+9`, `IGPM`. |
 | `inicio_rendimento` | string | Obrigatorio, formato `YYYY-MM` ou `YYYY-MM-DD`. |
 | `periodicidade_pagamento` | string | Obrigatorio, apenas: `mensal` ou `trimestral`. |
 
@@ -42,10 +42,12 @@ Definir contratos fechados para ingestao de dados via CSV no portal.
 - `tipo_rendimento`: aplicar `trim`; mapear variacoes abaixo para canonical:
   - entradas contendo `cdi` e `+N` -> `CDI+N`
   - entradas contendo `ipca` e `+N` -> `IPCA+N`
+  - entradas `igpm`, `igp-m` -> `IGPM`
   - entradas contendo `1%`, `1.0`, `1,0` e `a.m` -> `1% a.m.`
 - `inicio_rendimento`: aceitar `YYYY-MM` ou `YYYY-MM-DD`.
 - `fim_rendimento`: aceitar `YYYY-MM` ou `YYYY-MM-DD`; quando informado, nao pode ser anterior a `inicio_rendimento`.
 - `periodicidade_pagamento`: aceitar apenas `mensal` e `trimestral`, com normalizacao para lowercase.
+- `IGPM`: deve usar `periodicidade_pagamento = mensal`.
 
 ### Exemplo valido
 ```csv

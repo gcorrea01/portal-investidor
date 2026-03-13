@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS investors (
   total_investido REAL NOT NULL CHECK (total_investido > 0),
   tipo_rendimento TEXT NOT NULL CHECK (
     tipo_rendimento = '1% a.m.'
+    OR tipo_rendimento = 'IGPM'
     OR tipo_rendimento LIKE 'CDI+%'
     OR tipo_rendimento LIKE 'IPCA+%'
   ),

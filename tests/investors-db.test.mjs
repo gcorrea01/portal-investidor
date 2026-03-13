@@ -14,6 +14,11 @@ const schemaPath = path.join(rootDir, "db", "schema.sql");
 test("investor database import creates schema and preserves repeated emails", async (t) => {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "sunnyhub-investors-db-"));
   const dbPath = path.join(tempDir, "investidores.sqlite");
+  const sourceCsv = await readFile(sourceCsvPath, "utf8");
+  const expectedRows = sourceCsv
+    .split(/\r?\n/)
+    .slice(1)
+    .filter((line) => line.trim().length > 0).length;
 
   t.after(async () => {
     await rm(tempDir, { recursive: true, force: true });
@@ -25,12 +30,12 @@ test("investor database import creates schema and preserves repeated emails", as
     schema: schemaPath,
   });
 
-  assert.equal(result.importedRows, 12);
+  assert.equal(result.importedRows, expectedRows);
 
   const db = new DatabaseSync(dbPath);
   try {
     const countRow = db.prepare("SELECT COUNT(*) AS total FROM investors").get();
-    assert.equal(countRow.total, 12);
+    assert.equal(countRow.total, expectedRows);
 
     const duplicateEmailRow = db
       .prepare("SELECT COUNT(*) AS total FROM investors WHERE email = ?")

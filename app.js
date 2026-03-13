@@ -171,6 +171,9 @@ function isInvestorInactive(investor) {
 }
 
 function seriesForInvestorRule(rule) {
+  if (safeTrim(rule).toUpperCase() === "IGPM") {
+    return state.igpmSeries;
+  }
   if (safeTrim(rule).toUpperCase().startsWith("IPCA+")) {
     return state.ipcaSeries;
   }

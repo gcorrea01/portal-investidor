@@ -5,7 +5,7 @@ Definir regras matematicas unicas para calculo mensal de dividendos.
 
 ## Entradas por investidor
 - `principal`: valor de `total_investido` (BRL).
-- `tipo_rendimento`: `CDI+N`, `IPCA+N` ou `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`, `IPCA+9`.
+- `tipo_rendimento`: `CDI+N`, `IPCA+N`, `IGPM` ou `1% a.m.`. Exemplos atuais: `CDI+3`, `CDI+5`, `CDI+7`, `IPCA+9`, `IGPM`.
 - `inicio_rendimento`: data inicial da apuracao.
 - `fim_rendimento`: data final opcional da apuracao.
 - `periodicidade_pagamento`: `mensal` ou `trimestral`.
@@ -35,6 +35,7 @@ Valores de referencia aproximados:
 ## Taxa aplicada por tipo
 - `CDI+N` com pagamento `mensal`: `taxa_aplicada_percent = cdi_percent + spread_mensal_N`
 - `IPCA+N` com pagamento `mensal`: `taxa_aplicada_percent = ipca_percent + spread_mensal_N`
+- `IGPM`: taxa inicial de `1.00%` ao mes, com reajuste anual pela variacao positiva acumulada do IGP-M dos 12 meses anteriores
 - `1% a.m.`: `taxa_aplicada_percent = 1.00`
 
 ## Calculo mensal
@@ -47,6 +48,10 @@ Para cada mes `m`:
 ## Regra de pagamento
 - `mensal`: o valor calculado no mes e pago no proprio mes.
 - Se houver `fim_rendimento`, a ultima competencia mensal e limitada por essa data. Se o encerramento ocorrer no meio do mes, aplicar proporcionalidade no ultimo mes.
+- `IGPM`: o dividendo mensal permanece constante por blocos de 12 meses contados desde `inicio_rendimento`. Ao virar um novo bloco:
+  - calcular `igpm_12m = ((1 + m1) * ... * (1 + m12) - 1)` usando os 12 meses anteriores
+  - se `igpm_12m > 0`, reajustar o valor mensal por esse fator
+  - se `igpm_12m <= 0`, manter o mesmo valor mensal
 - `trimestral`: o valor continua sendo apurado por janelas de 3 meses, contadas a partir de `inicio_rendimento`, mas o pagamento ocorre no mes seguinte ao fechamento dessa janela.
 - Exemplo: competencia `jul/ago/set` paga em `out`; `out/nov/dez` paga em `jan`.
 - Para `CDI+N` com `trimestral`, a taxa do trimestre e calculada como:
