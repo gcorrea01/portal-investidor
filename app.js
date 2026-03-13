@@ -1,49 +1,26 @@
 import {
   calculateHistory,
+  resolveViewerScope,
   safeTrim,
   validateCdiRows,
-  validateInvestorApiResponse,
   validateIgpmRows,
+  validateInvestorRows,
 } from "./src/business.mjs";
 
 const DATA_FILES = {
+  investors: "./data/investidores.csv",
   cdi: "./data/cdi.csv",
   igpm: "./data/igpm.csv",
 };
 
-function defaultApiBaseUrl() {
-  const { hostname, protocol } = window.location;
-  const isLocalHost =
-    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-
-  if (isLocalHost) {
-    return `${protocol}//${hostname}:3001`;
-  }
-
-  return "";
-}
-
-const DEFAULT_API_BASE_URL = defaultApiBaseUrl();
-
-const API_CONFIG = {
-  health:
-    window.SUNNY_PORTAL_CONFIG?.investorsHealthApiUrl ||
-    document.body.dataset.investorsHealthApiUrl ||
-    `${DEFAULT_API_BASE_URL}/api/health`,
-  viewer:
-    window.SUNNY_PORTAL_CONFIG?.investorsViewerApiUrl ||
-    document.body.dataset.investorsViewerApiUrl ||
-    `${DEFAULT_API_BASE_URL}/api/viewer`,
-};
-
 const state = {
+  investors: [],
   cdiSeries: [],
   igpmSeries: [],
   viewerRole: "none",
   accessibleInvestors: [],
   currentInvestor: null,
   history: [],
-  backendReady: false,
 };
 
 const els = {
@@ -97,68 +74,6 @@ function renderBootErrors(errors) {
   els.bootErrors.innerHTML = `<p>Falha ao carregar os dados base:</p><ul>${items}</ul>`;
   els.bootErrors.classList.remove("hidden");
   els.bootErrors.classList.add("error");
-}
-
-async function fetchInvestorScope(email) {
-  let response;
-
-  try {
-    response = await fetch(`${API_CONFIG.viewer}?email=${encodeURIComponent(email)}`, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-  } catch {
-    throw new Error("Nao foi possivel conectar ao backend de investidores.");
-  }
-
-  if (response.status === 404) {
-    return {
-      role: "none",
-      investors: [],
-      errors: [],
-    };
-  }
-
-  if (!response.ok) {
-    throw new Error(`API de investidores indisponivel (${response.status}).`);
-  }
-
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error("API de investidores retornou JSON invalido.");
-  }
-
-  const investorValidation = validateInvestorApiResponse(payload?.investors ?? payload?.data ?? []);
-  return {
-    role: safeTrim(payload?.role).toLowerCase() || "none",
-    investors: investorValidation.data,
-    errors: investorValidation.errors,
-  };
-}
-
-async function checkBackendHealth() {
-  let response;
-
-  try {
-    response = await fetch(API_CONFIG.health, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-  } catch {
-    throw new Error(
-      "Backend de investidores indisponivel. Verifique a API antes de liberar o portal."
-    );
-  }
-
-  if (!response.ok) {
-    throw new Error(`Healthcheck do backend falhou (${response.status}).`);
-  }
 }
 
 function parseCSV(text) {
@@ -410,7 +325,7 @@ function showDashboard(investor) {
 function handleLogin(event) {
   event.preventDefault();
 
-  if (!state.backendReady || !state.cdiSeries.length) {
+  if (!state.investors.length || !state.cdiSeries.length) {
     setStatus("Dados ainda nao estao disponiveis. Tente novamente em instantes.", "error");
     return;
   }
@@ -422,60 +337,48 @@ function handleLogin(event) {
     return;
   }
 
-  renderBootErrors([]);
+  const scope = resolveViewerScope(email, state.investors);
+  if (!scope.investors.length) {
+    setStatus("E-mail nao encontrado na base carregada.", "error");
+    return;
+  }
 
-  fetchInvestorScope(email)
-    .then((scope) => {
-      if (scope.errors.length) {
-        renderBootErrors(scope.errors);
-        setStatus("API retornou investidores fora do contrato esperado.", "error");
-        return;
-      }
+  state.viewerRole = scope.role;
+  state.accessibleInvestors = scope.investors;
 
-      if (!scope.investors.length) {
-        setStatus("E-mail nao encontrado na API de investidores.", "error");
-        return;
-      }
+  const preferred = scope.investors.find((item) => item.email === email) || scope.investors[0];
 
-      state.viewerRole = scope.role;
-      state.accessibleInvestors = scope.investors;
-
-      const preferred = scope.investors.find((item) => item.email === email) || scope.investors[0];
-
-      showDashboard(preferred);
-      setStatus(
-        `Acesso ${roleLabel(scope.role).toLowerCase()} liberado para ${scope.investors.length} conta(s).`,
-        "ok"
-      );
-    })
-    .catch((error) => {
-      setStatus(error.message || "Falha ao consultar investidores no backend.", "error");
-    });
-
-  setStatus("Consultando acesso no backend...", "");
+  showDashboard(preferred);
+  setStatus(
+    `Acesso ${roleLabel(scope.role).toLowerCase()} liberado para ${scope.investors.length} conta(s).`,
+    "ok"
+  );
 }
 
 async function bootstrapData() {
   try {
-    setStatus("Carregando backend, CDI e IGP-M...", "");
+    setStatus("Carregando base de investidores, CDI e IGP-M...", "");
 
-    const [, cdiResponse, igpmResponse] = await Promise.all([
-      checkBackendHealth(),
+    const [investorResponse, cdiResponse, igpmResponse] = await Promise.all([
+      fetch(DATA_FILES.investors, { cache: "no-store" }),
       fetch(DATA_FILES.cdi, { cache: "no-store" }),
       fetch(DATA_FILES.igpm, { cache: "no-store" }),
     ]);
 
-    if (!cdiResponse.ok || !igpmResponse.ok) {
-      throw new Error(
-        "Nao foi possivel ler os CSVs em data/cdi.csv e data/igpm.csv."
-      );
+    if (!investorResponse.ok || !cdiResponse.ok || !igpmResponse.ok) {
+      throw new Error("Nao foi possivel ler os CSVs em data/investidores.csv, data/cdi.csv e data/igpm.csv.");
     }
 
-    const [cdiText, igpmText] = await Promise.all([cdiResponse.text(), igpmResponse.text()]);
+    const [investorText, cdiText, igpmText] = await Promise.all([
+      investorResponse.text(),
+      cdiResponse.text(),
+      igpmResponse.text(),
+    ]);
 
+    const investorValidation = validateInvestorRows(parseCSV(investorText));
     const cdiValidation = validateCdiRows(parseCSV(cdiText));
     const igpmValidation = validateIgpmRows(parseCSV(igpmText));
-    const errors = [...cdiValidation.errors, ...igpmValidation.errors];
+    const errors = [...investorValidation.errors, ...cdiValidation.errors, ...igpmValidation.errors];
 
     if (errors.length) {
       renderBootErrors(errors);
@@ -484,22 +387,21 @@ async function bootstrapData() {
     }
 
     renderBootErrors([]);
+    state.investors = investorValidation.data;
     state.cdiSeries = cdiValidation.data;
     state.igpmSeries = igpmValidation.data;
-    state.backendReady = true;
     setStatus("", "");
   } catch (error) {
-    state.backendReady = false;
     renderBootErrors([
       {
         code: "BOOT_FAIL",
-        file: "bootstrap",
+        file: "data/",
         line: null,
         field: null,
         message: error.message || "Erro desconhecido ao carregar dados iniciais.",
       },
     ]);
-    setStatus("Erro ao carregar dados iniciais do portal. Confira API e arquivos de indices.", "error");
+    setStatus("Erro ao carregar dados iniciais do portal.", "error");
   }
 }
 

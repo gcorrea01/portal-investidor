@@ -11,6 +11,7 @@ const staticEntries = [
   "styles.css",
   "app.js",
   "LOGOTIPO LARANJA.png",
+  "data/investidores.csv",
   "data/cdi.csv",
   "data/igpm.csv",
   "src",
