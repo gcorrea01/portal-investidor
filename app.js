@@ -39,12 +39,14 @@ const els = {
   investorRule: document.getElementById("investorRule"),
   viewerBadge: document.getElementById("viewerBadge"),
   investmentStatus: document.getElementById("investmentStatus"),
+  investorStartDate: document.getElementById("investorStartDate"),
   investorPeriod: document.getElementById("investorPeriod"),
   accountSwitchWrap: document.getElementById("accountSwitchWrap"),
   accountSelect: document.getElementById("accountSelect"),
   kpiInvested: document.getElementById("kpiInvested"),
   kpiDividends: document.getElementById("kpiDividends"),
   kpiProjected: document.getElementById("kpiProjected"),
+  historyIndexHeader: document.getElementById("historyIndexHeader"),
   historyTableBody: document.getElementById("historyTableBody"),
   dividendChart: document.getElementById("dividendChart"),
 };
@@ -158,6 +160,12 @@ function monthLabel(monthValue) {
   return `${month}/${year.slice(-2)}`;
 }
 
+function dateLabel(dateValue) {
+  const [year, month, day] = safeTrim(dateValue).split("-");
+  if (!year || !month || !day) return dateValue || "-";
+  return `${day}/${month}/${year}`;
+}
+
 function isInvestorInactive(investor) {
   const endDate = safeTrim(investor.endDate);
   if (!endDate) return false;
@@ -178,6 +186,15 @@ function seriesForInvestorRule(rule) {
     return state.ipcaSeries;
   }
   return state.cdiSeries;
+}
+
+function historyIndexLabel(rule) {
+  const normalizedRule = safeTrim(rule).toUpperCase();
+  if (normalizedRule.startsWith("CDI+")) return "CDI (%)";
+  if (normalizedRule.startsWith("IPCA+")) return "IPCA (%)";
+  if (normalizedRule === "IGPM") return "IGPM (%)";
+  if (normalizedRule === "1% A.M.") return "Referência";
+  return "Índice (%)";
 }
 
 function logout() {
@@ -231,14 +248,15 @@ function renderAccountSwitcher(activeId) {
     .join("");
 }
 
-function renderHistoryTable(history) {
+function renderHistoryTable(history, investor) {
   els.historyTableBody.innerHTML = "";
+  const shouldHideIndex = safeTrim(investor?.rule) === "1% a.m.";
 
   history.forEach((item) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${item.month}</td>
-      <td>${pct(item.cdi)}</td>
+      <td>${shouldHideIndex ? "NA" : pct(item.cdi)}</td>
       <td>${pct(item.appliedRate)}</td>
       <td>${brl(item.dividend)}</td>
       <td>${brl(item.accumulated)}</td>
@@ -339,6 +357,12 @@ function showDashboard(investor) {
     els.investmentStatus.classList.toggle("hidden", !inactive);
     els.investmentStatus.classList.toggle("inactive", inactive);
   }
+  if (els.investorStartDate) {
+    els.investorStartDate.textContent = `Início: ${dateLabel(investor.startDate)}`;
+  }
+  if (els.historyIndexHeader) {
+    els.historyIndexHeader.textContent = historyIndexLabel(investor.rule);
+  }
   const periodStart = history[0]?.month || "-";
   const periodEnd = history[history.length - 1]?.month || "-";
   els.investorPeriod.textContent = `Periodo: ${monthLabel(periodStart)} a ${monthLabel(periodEnd)}`;
@@ -347,7 +371,7 @@ function showDashboard(investor) {
   els.kpiProjected.textContent = brl(projected);
 
   renderAccountSwitcher(investor.id);
-  renderHistoryTable(history);
+  renderHistoryTable(history, investor);
   renderChart(history);
 
   els.loginPanel.classList.add("hidden");
